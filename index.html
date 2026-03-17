@@ -2041,7 +2041,7 @@ function recalc(){
   const c=calcDay(todayData);
   document.getElementById('takeHome').textContent=fmtNum(c.takeHome);
   document.getElementById('summarySubtitle').textContent=c.tripCount?`${c.tripCount} trip${c.tripCount!==1?'s':''} · ${fmt(c.totalComm)} comm · ${fmt(c.totalExp)} expenses`:'No trips logged yet';
-  document.getElementById('grossEarn').textContent=fmtShort(c.totalFares);
+  document.getElementById('grossEarn').textContent=fmtShort(c.totalFares+c.totalTips+c.totalBonus);
   document.getElementById('totalDeduct').textContent=fmtShort(c.totalComm+c.totalExp);
   document.getElementById('tripCount').textContent=c.tripCount;
   document.getElementById('bFares').textContent=fmt(c.totalFares);
