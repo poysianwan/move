@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" id="appleIcon">
 <title>MoveIt Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" onerror="window._tesseractFailed=true"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -607,7 +608,103 @@ input,select,button{font-family:inherit}
 .swipe-hint svg{width:12px;height:12px;stroke:var(--text-3);stroke-width:1.75;flex-shrink:0}
 @keyframes fadeOut{0%,30%{opacity:1}100%{opacity:0;pointer-events:none}}
 
-/* ── DATE PICKER ─────────────────────────── */
+/* ── GRAB OCR IMPORT ─────────────────────── */
+.grab-form{display:flex;flex-direction:column;gap:0}
+.grab-upload-zone{
+  border:2px dashed var(--border-3);border-radius:var(--r3);
+  padding:var(--s6) var(--s4);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:var(--s2);cursor:pointer;
+  transition:all var(--t-fast);margin-bottom:var(--s3);
+  text-align:center;
+}
+.grab-upload-zone:hover{border-color:var(--accent);background:var(--accent-dim)}
+.grab-upload-zone:active{transform:scale(0.98)}
+.grab-upload-icon svg{width:28px;height:28px;stroke:var(--text-3);stroke-width:1.5}
+.grab-upload-zone:hover .grab-upload-icon svg{stroke:var(--accent)}
+.grab-upload-label{font-size:13px;font-weight:600;color:var(--text-1)}
+.grab-upload-sub{font-size:11px;color:var(--text-3)}
+.grab-status{
+  display:flex;align-items:center;gap:var(--s3);
+  background:var(--surface);border:1px solid var(--border-2);
+  border-radius:var(--r2);padding:10px var(--s4);
+  font-size:12px;color:var(--text-2);margin-bottom:var(--s3);
+}
+.grab-status-spinner{
+  width:16px;height:16px;border-radius:50%;flex-shrink:0;
+  border:2px solid var(--border-3);
+  border-top-color:var(--accent);
+  animation:spin 0.7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.grab-result-title{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:700;letter-spacing:0.07em;
+  text-transform:uppercase;color:var(--pos);
+  margin-bottom:var(--s3);
+}
+.grab-result-title svg{stroke:var(--pos)}
+.grab-preview{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r2);overflow:hidden;margin-bottom:0;
+}
+.grab-preview-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px var(--s3);border-bottom:1px solid var(--border);
+  font-size:12px;
+}
+.grab-preview-row:last-child{border-bottom:none}
+.grab-preview-row span:first-child{color:var(--text-2)}
+.grab-preview-row span:last-child{font-family:var(--font-num);font-weight:500;font-size:12px}
+.grab-preview-total{background:var(--accent-dim)}
+.grab-preview-total span:first-child{color:var(--text-1);font-weight:600}
+.grab-preview-total span:last-child{font-size:14px!important}
+.grab-batch-progress{margin-bottom:var(--s3)}
+.grab-batch-bar-wrap{height:4px;background:var(--border);border-radius:2px;margin-bottom:6px;overflow:hidden}
+.grab-batch-bar{height:100%;background:var(--accent);border-radius:2px;transition:width 0.3s ease;width:0%}
+.grab-batch-status{font-size:11px;color:var(--text-2);text-align:center}
+.grab-batch-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)}
+/* Per-image queue card */
+.grab-queue-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r3);padding:var(--s3) var(--s4);
+  margin-bottom:var(--s2);
+}
+.grab-queue-card.processing{border-color:var(--accent-mid);animation:pulse 1s ease infinite alternate}
+.grab-queue-card.done{border-color:rgba(61,153,112,0.3)}
+.grab-queue-card.error{border-color:rgba(200,68,68,0.3)}
+.grab-queue-card.skipped{opacity:0.5}
+@keyframes pulse{from{border-color:var(--accent-mid)}to{border-color:var(--accent)}}
+.gqc-top{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s2)}
+.gqc-thumb{width:40px;height:40px;border-radius:var(--r1);object-fit:cover;object-position:top;flex-shrink:0;border:1px solid var(--border)}
+.gqc-info{flex:1;min-width:0}
+.gqc-name{font-size:11px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gqc-status{font-size:10px;color:var(--text-2);margin-top:2px}
+.gqc-net{font-family:var(--font-num);font-size:13px;font-weight:600;color:var(--pos);flex-shrink:0}
+.gqc-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s1)}
+.gqc-field{background:var(--bg-3);border-radius:var(--r1);padding:5px 8px}
+.gqc-field label{font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-3);display:block;margin-bottom:1px}
+.gqc-field input{background:transparent;border:none;outline:none;color:var(--text-1);font-family:var(--font-num);font-size:12px;font-weight:500;width:100%}
+.gqc-remove{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:0 2px;transition:color var(--t-fast);flex-shrink:0}
+.gqc-remove:hover{color:var(--neg)}
+.grab-list-trip{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:8px var(--s3);margin-bottom:6px;display:flex;align-items:center;gap:var(--s2)}
+.glt-num{width:20px;height:20px;border-radius:var(--r1);background:var(--bg-3);font-size:10px;font-weight:600;color:var(--text-3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.glt-body{flex:1;min-width:0}
+.glt-dest{font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.glt-input-wrap{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.glt-input-wrap span{font-size:11px;color:var(--text-3)}
+.glt-input{width:64px;background:var(--bg-3);border:1px solid var(--border-2);border-radius:var(--r1);padding:3px 6px;font-family:var(--font-num);font-size:12px;font-weight:600;color:var(--pos);text-align:right;outline:none}
+.glt-input:focus{border-color:var(--accent)}
+.glt-remove{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:13px;padding:0 2px;transition:color var(--t-fast)}
+.glt-remove:hover{color:var(--neg)}
+
+.grab-err{
+  background:var(--neg-dim);border:1px solid rgba(200,68,68,0.2);
+  border-radius:var(--r2);padding:10px var(--s3);
+  font-size:12px;color:var(--neg);margin-bottom:var(--s3);
+  display:none;
+}
+
 .date-chip{
   font-size:11px;font-weight:600;color:var(--text-2);
   background:var(--surface-2);border:1px solid var(--border-2);
@@ -747,8 +844,8 @@ input,select,button{font-family:inherit}
       <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" aria-label="Toggle theme" title="Toggle theme">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
       </button>
-      <button class="date-chip" id="dateLabel" onclick="openDatePicker()" aria-label="Select date">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <button type="button" class="date-chip" id="dateLabel" onclick="openDatePicker()" aria-label="Select date">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;stroke-width:2;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         <span id="dateLabelText"></span>
       </button>
     </div>
@@ -785,14 +882,15 @@ input,select,button{font-family:inherit}
   <div class="tab-pane active" id="tab-trips">
     <div class="sec">
       <div class="seg" style="margin-top:var(--s4)">
-        <button class="seg-btn active" id="modeQuick" onclick="switchMode('quick')">Quick Entry</button>
-        <button class="seg-btn" id="modeForm" onclick="switchMode('form')">Detailed Form</button>
+        <button class="seg-btn active" id="modeQuick" onclick="switchMode('quick')">Quick</button>
+        <button class="seg-btn" id="modeForm" onclick="switchMode('form')">Detailed</button>
+        <button class="seg-btn" id="modeGrab" onclick="switchMode('grab')">Grab Import</button>
       </div>
 
       <!-- Quick entry panel -->
       <div id="panel-quick" class="mode-panel active">
         <div class="qe-wrap">
-          <input class="qe-input" id="quickInput" placeholder="e.g.  150  or  200 30tip  or  150 20tip 18%" autocomplete="off" oninput="previewParse()" onkeydown="if(event.key==='Enter')submitQuick()">
+          <input class="qe-input" id="quickInput" placeholder="e.g.  150  or  200 30t  or  150 20t 18%" autocomplete="off" oninput="previewParse()" onkeydown="if(event.key==='Enter')submitQuick()">
           <button class="qe-btn" onclick="submitQuick()" aria-label="Add trip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
@@ -821,6 +919,87 @@ input,select,button{font-family:inherit}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="14" height="14" style="stroke-width:2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add Trip
         </button>
+      </div>
+
+      <!-- Grab Import panel — automated OCR -->
+      <div id="panel-grab" class="mode-panel" style="display:none">
+        <div class="grab-form">
+
+          <!-- Scan mode toggle -->
+          <div class="seg" style="margin-bottom:var(--s3)">
+            <button class="seg-btn active" id="scanModeJob" onclick="setScanMode('job')">Job Details</button>
+            <button class="seg-btn" id="scanModeList" onclick="setScanMode('list')">Earnings List</button>
+          </div>
+
+          <!-- ── JOB DETAILS PANEL (original) ── -->
+          <div id="grabPanelJob">
+            <div class="grab-upload-zone" id="grabUploadZone" onclick="document.getElementById('grabFileInput').click()">
+              <input type="file" id="grabFileInput" accept="image/*" multiple style="display:none" onchange="handleGrabBatch(event)">
+              <div class="grab-upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <div class="grab-upload-label">Tap to import Job Details screenshots</div>
+              <div class="grab-upload-sub">Shows "Total net earnings" + Service Fee breakdown</div>
+            </div>
+            <div class="grab-batch-progress" id="grabBatchProgress" style="display:none">
+              <div class="grab-batch-bar-wrap"><div class="grab-batch-bar" id="grabBatchBar"></div></div>
+              <div class="grab-batch-status" id="grabBatchStatus"></div>
+            </div>
+            <div id="grabBatchQueue" style="display:none">
+              <div class="grab-batch-header">
+                <span class="grab-result-title" style="margin-bottom:0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13" style="stroke-width:2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span id="grabBatchCount"></span>
+                </span>
+                <button class="btn-sm" onclick="resetGrabForm()" style="font-size:10px;padding:4px 10px">Clear</button>
+              </div>
+              <div id="grabQueueList"></div>
+              <div class="btn-row" style="margin-top:var(--s3)">
+                <button class="btn btn-primary" onclick="saveAllGrabTrips()" style="flex:1">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13" style="stroke-width:2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Save All Trips
+                </button>
+                <button class="btn btn-ghost" onclick="document.getElementById('grabFileInput').click()" style="flex:1">Add More</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── EARNINGS LIST PANEL (new) ── -->
+          <div id="grabPanelList" style="display:none">
+            <div class="grab-upload-zone" id="grabListUploadZone" onclick="document.getElementById('grabListFileInput').click()">
+              <input type="file" id="grabListFileInput" accept="image/*" multiple style="display:none" onchange="handleListBatch(event)">
+              <div class="grab-upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </div>
+              <div class="grab-upload-label">Tap to import Earnings List screenshots</div>
+              <div class="grab-upload-sub">The Daily/Weekly list showing all trips with amounts</div>
+            </div>
+            <!-- Progress -->
+            <div class="grab-batch-progress" id="grabListProgress" style="display:none">
+              <div class="grab-batch-bar-wrap"><div class="grab-batch-bar" id="grabListBar"></div></div>
+              <div class="grab-batch-status" id="grabListStatus"></div>
+            </div>
+            <!-- Scanned trips list -->
+            <div id="grabListResult" style="display:none">
+              <div class="grab-batch-header">
+                <span class="grab-result-title" style="margin-bottom:0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13" style="stroke-width:2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span id="grabListCount"></span>
+                </span>
+                <button class="btn-sm" onclick="resetListForm()" style="font-size:10px;padding:4px 10px">Clear</button>
+              </div>
+              <div id="grabListTrips"></div>
+              <div class="btn-row" style="margin-top:var(--s3)">
+                <button class="btn btn-primary" onclick="saveAllListTrips()" style="flex:1">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13" style="stroke-width:2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Save All Trips
+                </button>
+                <button class="btn btn-ghost" onclick="document.getElementById('grabListFileInput').click()" style="flex:1">Add More</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
 
@@ -1096,11 +1275,499 @@ function switchTab(name,el){
   el.classList.add('active');
 }
 function switchMode(m){
-  document.getElementById('panel-quick').style.display=m==='quick'?'block':'none';
-  document.getElementById('panel-form').style.display=m==='form'?'block':'none';
-  document.getElementById('modeQuick').classList.toggle('active',m==='quick');
-  document.getElementById('modeForm').classList.toggle('active',m==='form');
+  ['quick','form','grab'].forEach(id=>{
+    const p=document.getElementById('panel-'+id);
+    if(p)p.style.display=m===id?'block':'none';
+  });
+  ['modeQuick','modeForm','modeGrab'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(b)b.classList.toggle('active',id==='mode'+m.charAt(0).toUpperCase()+m.slice(1));
+  });
+  // Init grab scan mode panels
+  if(m==='grab'){
+    const job=document.getElementById('grabPanelJob');
+    const list=document.getElementById('grabPanelList');
+    if(job&&job.style.display==='none'&&list&&list.style.display==='none'){
+      job.style.display='block'; // default to job details
+    }
+  }
 }
+
+// ════════════════════════════════════════
+// GRAB OCR IMPORT
+// ════════════════════════════════════════
+// ════════════════════════════════════════
+// GRAB BATCH OCR
+// ════════════════════════════════════════
+let grabQueue=[]; // [{id, file, imgData, status, parsed}]
+
+async function handleGrabBatch(e){
+  const files=Array.from(e.target.files);
+  if(!files.length)return;
+  e.target.value='';
+
+  // Add new files to queue
+  const newItems=files.map((f,i)=>({
+    id:Date.now()+i,
+    file:f,
+    imgData:null,
+    status:'pending', // pending | processing | done | error
+    parsed:null,
+    error:null
+  }));
+  grabQueue=[...grabQueue,...newItems];
+
+  document.getElementById('grabUploadZone').style.display='none';
+  document.getElementById('grabBatchQueue').style.display='block';
+  renderBatchQueue();
+
+  // Load tesseract once upfront
+  try{
+    document.getElementById('grabBatchProgress').style.display='block';
+    updateBatchProgress(0,files.length,'Loading OCR library...');
+    await loadTesseract();
+  }catch(err){
+    showToastSimple('OCR failed to load. Check internet connection.');
+    resetGrabForm();return;
+  }
+
+  // Process each pending item sequentially
+  let done=0;
+  const pending=grabQueue.filter(i=>i.status==='pending');
+  for(const item of pending){
+    item.status='processing';
+    renderBatchQueue();
+    updateBatchProgress(done,pending.length,`Scanning ${done+1} of ${pending.length}...`);
+    try{
+      // Read file as dataURL
+      item.imgData=await fileToDataURL(item.file);
+      // Run OCR
+      const {data:{text}}=await Tesseract.recognize(item.imgData,'eng',{
+        logger:m=>{
+          if(m.status==='recognizing text'){
+            updateBatchProgress(done,pending.length,`Scanning ${done+1} of ${pending.length}... ${Math.round(m.progress*100)}%`);
+          }
+        }
+      });
+      const parsed=parseGrabText(text);
+      if(!parsed.net&&!parsed.serviceFee){
+        item.status='error';
+        item.error='Could not read earnings — check this is a Job Details screen';
+      } else {
+        item.status='done';
+        item.parsed=parsed;
+      }
+    }catch(err){
+      item.status='error';
+      item.error=err.message;
+    }
+    done++;
+    renderBatchQueue();
+  }
+
+  updateBatchProgress(done,pending.length,'Done — review and save below');
+  setTimeout(()=>{document.getElementById('grabBatchProgress').style.display='none';},2000);
+}
+
+function fileToDataURL(file){
+  return new Promise(res=>{
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result);
+    r.readAsDataURL(file);
+  });
+}
+
+function updateBatchProgress(done,total,text){
+  const bar=document.getElementById('grabBatchBar');
+  const status=document.getElementById('grabBatchStatus');
+  if(bar)bar.style.width=(total>0?(done/total)*100:0)+'%';
+  if(status)status.textContent=text;
+}
+
+function renderBatchQueue(){
+  const list=document.getElementById('grabQueueList');
+  const count=document.getElementById('grabBatchCount');
+  const doneCount=grabQueue.filter(i=>i.status==='done').length;
+  const total=grabQueue.length;
+  if(count)count.textContent=`${total} screenshot${total!==1?'s':''} scanned · ${doneCount} ready`;
+
+  list.innerHTML=grabQueue.map((item,idx)=>{
+    const p=item.parsed||{net:0,serviceFee:0,promo:0,tip:0,bonus:0};
+    const takeHome=(p.net||0)+(p.tip||0)+(p.bonus||0);
+    const statusText={
+      pending:'Waiting...',
+      processing:'Scanning...',
+      done:'Ready to save',
+      error:item.error||'Error reading image'
+    }[item.status];
+    const thumb=item.imgData?`<img class="gqc-thumb" src="${item.imgData}">`:`<div class="gqc-thumb" style="background:var(--bg-3);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:10px">${item.status==='processing'?'..':'?'}</div>`;
+
+    return `<div class="grab-queue-card ${item.status}" id="gqc-${item.id}">
+      <div class="gqc-top">
+        ${thumb}
+        <div class="gqc-info">
+          <div class="gqc-name">${item.file.name}</div>
+          <div class="gqc-status">${statusText}</div>
+        </div>
+        ${item.status==='done'?`<div class="gqc-net">${fmt(takeHome)}</div>`:''}
+        ${item.status!=='processing'?`<button class="gqc-remove" onclick="removeQueueItem(${item.id})" title="Remove">✕</button>`:''}
+      </div>
+      ${item.status==='done'?`
+      <div class="gqc-fields">
+        <div class="gqc-field"><label>Net (₱)</label><input type="number" value="${p.net||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'net',this.value)"></div>
+        <div class="gqc-field"><label>Svc Fee (₱)</label><input type="number" value="${p.serviceFee||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'serviceFee',this.value)"></div>
+        <div class="gqc-field"><label>Promo (₱)</label><input type="number" value="${p.promo||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'promo',this.value)"></div>
+        <div class="gqc-field"><label>Tip (₱)</label><input type="number" value="${p.tip||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'tip',this.value)"></div>
+        <div class="gqc-field"><label>Bonus (₱)</label><input type="number" value="${p.bonus||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'bonus',this.value)"></div>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function removeQueueItem(id){
+  grabQueue=grabQueue.filter(i=>i.id!==id);
+  if(!grabQueue.length){resetGrabForm();return;}
+  renderBatchQueue();
+}
+
+function updateQueueItem(id,field,val){
+  const item=grabQueue.find(i=>i.id===id);
+  if(!item||!item.parsed)return;
+  item.parsed[field]=parseFloat(val)||0;
+  // Update the net display in card header
+  const card=document.getElementById('gqc-'+id);
+  if(card){
+    const netEl=card.querySelector('.gqc-net');
+    if(netEl){
+      const p=item.parsed;
+      netEl.textContent=fmt((p.net||0)+(p.tip||0)+(p.bonus||0));
+    }
+  }
+}
+
+function saveAllGrabTrips(){
+  const ready=grabQueue.filter(i=>i.status==='done');
+  if(!ready.length){showToastSimple('No trips ready to save.');return;}
+
+  ready.forEach(item=>{
+    const p=item.parsed;
+    const net=p.net||0,fee=p.serviceFee||0,promo=p.promo||0,tip=p.tip||0,bonus=p.bonus||0;
+    if(net<=0)return;
+    const passFare=net+fee;
+    const commAmt=fee;
+    const commRate=passFare>0?Math.round((fee/passFare)*1000)/10:0;
+    const tripNet=net+tip+bonus;
+    todayData.trips.push({
+      fare:passFare,tip,commRate,commAmt,bonus,
+      net:tripNet,id:Date.now()+Math.random(),
+      _source:'grab',_promo:promo
+    });
+  });
+
+  saveTodayData(todayData);
+  renderTrips();recalc();
+  showToastSimple(`✓ ${ready.length} trip${ready.length!==1?'s':''} imported from Grab.`);
+  resetGrabForm();
+}
+
+function resetGrabForm(){
+  grabQueue=[];
+  document.getElementById('grabBatchQueue').style.display='none';
+  document.getElementById('grabBatchProgress').style.display='none';
+  document.getElementById('grabUploadZone').style.display='flex';
+  const err=document.querySelector('.grab-err');
+  if(err)err.style.display='none';
+}
+
+// ════════════════════════════════════════
+// SCAN MODE TOGGLE
+// ════════════════════════════════════════
+function setScanMode(mode){
+  document.getElementById('scanModeJob').classList.toggle('active',mode==='job');
+  document.getElementById('scanModeList').classList.toggle('active',mode==='list');
+  document.getElementById('grabPanelJob').style.display=mode==='job'?'block':'none';
+  document.getElementById('grabPanelList').style.display=mode==='list'?'block':'none';
+}
+
+// ════════════════════════════════════════
+// EARNINGS LIST OCR
+// ════════════════════════════════════════
+let listTrips=[]; // [{id, dest, amount, include}]
+
+async function handleListBatch(e){
+  const files=Array.from(e.target.files);
+  if(!files.length)return;
+  e.target.value='';
+  document.getElementById('grabListUploadZone').style.display='none';
+  document.getElementById('grabListProgress').style.display='block';
+  try{
+    updateListProgress(0,files.length,'Loading OCR library...');
+    await loadTesseract();
+    let allTrips=[];
+    for(let i=0;i<files.length;i++){
+      updateListProgress(i,files.length,`Scanning image ${i+1} of ${files.length}...`);
+      const imgData=await fileToDataURL(files[i]);
+      const {data:{text}}=await Tesseract.recognize(imgData,'eng',{
+        logger:m=>{
+          if(m.status==='recognizing text')
+            updateListProgress(i,files.length,`Scanning ${i+1} of ${files.length}... ${Math.round(m.progress*100)}%`);
+        }
+      });
+      const trips=parseEarningsList(text);
+      allTrips=[...allTrips,...trips];
+    }
+    // Deduplicate by amount+dest
+    const seen=new Set();
+    allTrips=allTrips.filter(t=>{
+      const key=t.dest+'|'+t.amount;
+      if(seen.has(key))return false;
+      seen.add(key);return true;
+    });
+    listTrips=[...listTrips,...allTrips.map((t,i)=>({id:Date.now()+i,...t,include:true}))];
+    document.getElementById('grabListProgress').style.display='none';
+    renderListTrips();
+    document.getElementById('grabListResult').style.display='block';
+  }catch(err){
+    document.getElementById('grabListProgress').style.display='none';
+    document.getElementById('grabListUploadZone').style.display='flex';
+    showToastSimple('OCR failed: '+err.message);
+  }
+}
+
+function updateListProgress(done,total,text){
+  const bar=document.getElementById('grabListBar');
+  const status=document.getElementById('grabListStatus');
+  if(bar)bar.style.width=(total>0?(done/total)*100:0)+'%';
+  if(status)status.textContent=text;
+}
+
+function parseEarningsList(text){
+  // Each trip in the Grab earnings list looks like:
+  // "HH:MM AM/PM\nDestination Name   AMOUNT.00\nGrabPay / Cash"
+  // Strategy: find all lines with a standalone decimal number (amount)
+  // and pair with the previous destination line
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const trips=[];
+  const amtRe=/^(\d{2,3}\.\d{2})$/; // standalone amount like "64.00"
+  const amtInlineRe=/(\d{2,3}\.\d{2})\s*$/; // amount at end of line
+
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    // Skip time lines (HH:MM AM/PM)
+    if(/^\d{1,2}:\d{2}\s*(AM|PM)/i.test(line))continue;
+    // Skip payment method lines
+    if(/^(GrabPay|Cash|GrabFood|GrabExpress)$/i.test(line))continue;
+
+    // Check if this line ends with an amount
+    const m=line.match(amtInlineRe);
+    if(m){
+      const amount=parseFloat(m[1]);
+      if(amount<10||amount>2000)continue; // sanity check
+      // Destination = line text minus the amount
+      let dest=line.replace(amtInlineRe,'').trim();
+      // If destination is empty, look at previous non-time line
+      if(!dest&&i>0){
+        for(let j=i-1;j>=0;j--){
+          const prev=lines[j];
+          if(!/^\d{1,2}:\d{2}/.test(prev)&&!/^(GrabPay|Cash)$/i.test(prev)){
+            dest=prev;break;
+          }
+        }
+      }
+      if(amount>0)trips.push({dest:dest||'Unknown destination',amount});
+    }
+  }
+  return trips;
+}
+
+function renderListTrips(){
+  const list=document.getElementById('grabListTrips');
+  const count=document.getElementById('grabListCount');
+  const included=listTrips.filter(t=>t.include).length;
+  if(count)count.textContent=`${listTrips.length} trips found · ${included} selected`;
+  list.innerHTML=listTrips.map((t,i)=>`
+    <div class="grab-list-trip" style="${!t.include?'opacity:0.4':''}">
+      <div class="glt-num">${i+1}</div>
+      <div class="glt-body">
+        <div class="glt-dest">${t.dest}</div>
+      </div>
+      <div class="glt-input-wrap">
+        <span>₱</span>
+        <input class="glt-input" type="number" value="${t.amount}" inputmode="decimal"
+          onchange="updateListTrip(${t.id},'amount',this.value)">
+      </div>
+      <button class="glt-remove" onclick="toggleListTrip(${t.id})" title="${t.include?'Remove':'Include'}">
+        ${t.include?'✕':'＋'}
+      </button>
+    </div>`).join('');
+}
+
+function updateListTrip(id,field,val){
+  const t=listTrips.find(t=>t.id===id);
+  if(t)t[field]=parseFloat(val)||0;
+}
+function toggleListTrip(id){
+  const t=listTrips.find(t=>t.id===id);
+  if(t){t.include=!t.include;renderListTrips();}
+}
+
+function saveAllListTrips(){
+  const ready=listTrips.filter(t=>t.include&&t.amount>0);
+  if(!ready.length){showToastSimple('No trips to save.');return;}
+  const COMM=20; // 20% commission
+  ready.forEach(t=>{
+    // The amount shown is already NET after Grab's cut
+    // Back-calculate: net = passFare × (1 - commRate/100)
+    // so passFare = net / (1 - 0.20) = net / 0.80
+    const passFare=Math.round(t.amount/0.80*100)/100;
+    const commAmt=Math.round((passFare-t.amount)*100)/100;
+    todayData.trips.push({
+      fare:passFare,
+      tip:0,
+      commRate:COMM,
+      commAmt,
+      bonus:0,
+      net:t.amount,
+      id:Date.now()+Math.random(),
+      _source:'grab-list',
+      _dest:t.dest
+    });
+  });
+  saveTodayData(todayData);
+  renderTrips();recalc();
+  showToastSimple(`✓ ${ready.length} trip${ready.length!==1?'s':''} imported.`);
+  resetListForm();
+}
+
+function resetListForm(){
+  listTrips=[];
+  document.getElementById('grabListResult').style.display='none';
+  document.getElementById('grabListProgress').style.display='none';
+  document.getElementById('grabListUploadZone').style.display='flex';
+}
+
+function loadTesseract(){
+  return new Promise((resolve,reject)=>{
+    if(typeof Tesseract!=='undefined'&&!window._tesseractFailed){resolve();return;}
+    const s=document.createElement('script');
+    // Try jsdelivr first, then esm.sh
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=()=>{window._tesseractFailed=false;resolve();};
+    s.onerror=()=>{
+      // Try esm.sh as second fallback
+      const s2=document.createElement('script');
+      s2.src='https://esm.sh/tesseract.js@5/dist/tesseract.min.js';
+      s2.onload=()=>{window._tesseractFailed=false;resolve();};
+      s2.onerror=()=>reject(new Error('Could not load OCR library. Please connect to the internet and try again.'));
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
+  });
+}
+
+function setVal(id,val){
+  const el=document.getElementById(id);
+  if(el)el.value=val||'';
+}
+
+function parseGrabText(text){
+  const t=text.replace(/[₱P₱]/g,'').replace(/,/g,'').replace(/\r/g,' ');
+  const lines=t.split('\n').map(l=>l.trim()).filter(Boolean);
+
+  function nums(line){return (line.match(/\d+\.\d{2}/g)||[]).map(Number);}
+
+  function findAfter(keywords,stopKeywords){
+    for(let i=0;i<lines.length;i++){
+      const lower=lines[i].toLowerCase();
+      if(keywords.some(k=>lower.includes(k))){
+        const n=nums(lines[i]);
+        if(n.length)return n[n.length-1];
+        for(let j=i+1;j<=i+3&&j<lines.length;j++){
+          const nextLower=lines[j].toLowerCase();
+          if(stopKeywords&&stopKeywords.some(k=>nextLower.includes(k)))break;
+          const n2=nums(lines[j]);
+          if(n2.length)return n2[n2.length-1];
+        }
+      }
+    }
+    return 0;
+  }
+
+  // 1. Total net earnings (driver take-home before tip/bonus)
+  const net=findAfter(['total net earnings','total net earn']);
+
+  // 2. Service fee TOTAL — scan inside "service fee" section for "total" line
+  //    Skip "passenger fare" and "driver earnings" lines inside that section
+  let serviceFee=0;
+  for(let i=0;i<lines.length;i++){
+    const lower=lines[i].toLowerCase();
+    if(lower.includes('service fee')){
+      for(let j=i+1;j<=i+8&&j<lines.length;j++){
+        const jl=lines[j].toLowerCase();
+        // Stop at next major section (Passenger fare header without numbers)
+        if(jl.includes('passenger fare')&&nums(lines[j]).length===0)break;
+        if(jl.includes('total')){
+          const n=nums(lines[j]);
+          if(n.length){serviceFee=n[n.length-1];break;}
+          if(j+1<lines.length){
+            const n2=nums(lines[j+1]);
+            if(n2.length){serviceFee=n2[n2.length-1];break;}
+          }
+        }
+      }
+      if(serviceFee)break;
+    }
+  }
+
+  // 3. Promo — negative value inside "Passenger fare" section
+  //    Grab shows it as "-10.00" next to "Promo"
+  let promo=0;
+  for(let i=0;i<lines.length;i++){
+    const lower=lines[i].toLowerCase();
+    if(lower.includes('promo')||lower.includes('discount')||lower.includes('voucher')){
+      // Could be on same line as negative number
+      const negMatch=lines[i].match(/-(\d+\.\d{2})/);
+      if(negMatch){promo=parseFloat(negMatch[1]);break;}
+      // Or on next line
+      if(i+1<lines.length){
+        const negMatch2=lines[i+1].match(/-?(\d+\.\d{2})/);
+        if(negMatch2){promo=parseFloat(negMatch2[1]);break;}
+      }
+    }
+  }
+
+  // 4. Tip
+  const tip=findAfter(['tip'],['total','bonus']);
+
+  // 5. Bonus / incentive
+  const bonus=findAfter(['bonus','incentive','reward'],['total']);
+
+  return{net,serviceFee,promo,tip,bonus};
+}
+
+function grabPreview(){
+  const net=parseFloat(document.getElementById('grabNet')?.value)||0;
+  const fee=parseFloat(document.getElementById('grabServiceFee')?.value)||0;
+  const promo=parseFloat(document.getElementById('grabPromo')?.value)||0;
+  const tip=parseFloat(document.getElementById('grabTip')?.value)||0;
+  const bonus=parseFloat(document.getElementById('grabBonus')?.value)||0;
+  const takeHome=net+tip+bonus;
+  const gf=document.getElementById('gp-fare');
+  const gc=document.getElementById('gp-comm');
+  const gpr=document.getElementById('gp-promo');
+  const gpr_row=document.getElementById('gp-promo-row');
+  const gt=document.getElementById('gp-tip');
+  const gb=document.getElementById('gp-bonus');
+  const gn=document.getElementById('gp-net');
+  if(gf)gf.textContent=fmt(net);
+  if(gc)gc.textContent='−'+fmt(fee);
+  if(gpr){gpr.textContent=promo>0?'−'+fmt(promo)+' (Grab pays)':'₱0.00';}
+  if(gpr_row)gpr_row.style.display=promo>0?'flex':'none';
+  if(gt)gt.textContent=fmt(tip);
+  if(gb)gb.textContent=fmt(bonus);
+  if(gn)gn.textContent=fmt(takeHome);
+}
+
 
 // ════════════════════════════════════════
 // QUICK ENTRY PARSER
@@ -1213,7 +1880,7 @@ function renderTrips(){
         <div class="trip-idx">${i+1}</div>
         <div class="trip-body">
           <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">${fmt(t.fare)} fare</div>
-          <div class="trip-meta">tip ${fmt(t.tip)} · ${t.commRate}% comm${t.bonus>0?' · bonus '+fmt(t.bonus):''}</div>
+          <div class="trip-meta">tip ${fmt(t.tip)} · ${t._source==='grab'?'svc fee −'+fmt(t.commAmt):t._source==='grab-list'?'earnings list import'+(t._dest?' · '+t._dest.substring(0,20):''):t.commRate+'% comm'}${t.bonus>0?' · bonus '+fmt(t.bonus):''}</div>
         </div>
         <div class="trip-net">${fmt(t.net)}</div>
         <div class="trip-edit-icon">
@@ -1373,8 +2040,8 @@ function recalc(){
   saveTodayData(todayData);
   const c=calcDay(todayData);
   document.getElementById('takeHome').textContent=fmtNum(c.takeHome);
-  document.getElementById('summarySubtitle').textContent=c.tripCount?`${c.tripCount} trip${c.tripCount!==1?'s':''} · ${fmt(c.totalComm)} commission deducted`:'No trips logged yet';
-  document.getElementById('grossEarn').textContent=fmtShort(c.gross);
+  document.getElementById('summarySubtitle').textContent=c.tripCount?`${c.tripCount} trip${c.tripCount!==1?'s':''} · ${fmt(c.totalComm)} comm · ${fmt(c.totalExp)} expenses`:'No trips logged yet';
+  document.getElementById('grossEarn').textContent=fmtShort(c.totalFares);
   document.getElementById('totalDeduct').textContent=fmtShort(c.totalComm+c.totalExp);
   document.getElementById('tripCount').textContent=c.tripCount;
   document.getElementById('bFares').textContent=fmt(c.totalFares);
