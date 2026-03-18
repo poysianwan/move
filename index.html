@@ -287,52 +287,22 @@ input,select,button{font-family:inherit}
 .tab-pane.active{display:block}
 
 /* ── QUICK ENTRY ─────────────────────────── */
-.qe-wrap{position:relative;margin-bottom:var(--s3)}
-.qe-input{
-  width:100%;
-  background:var(--surface);
-  border:1px solid var(--border-2);
-  border-radius:var(--r3);
-  padding:var(--s3) 48px var(--s3) var(--s4);
-  color:var(--text-1);
-  font-family:var(--font-num);font-size:14px;
-  outline:none;
-  transition:border-color var(--t-fast),box-shadow var(--t-fast);
-}
-.qe-input:focus{
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-dim);
-}
-.qe-input::placeholder{
-  font-family:var(--font-ui);font-size:13px;
-  color:var(--text-3);
-}
-.qe-btn{
-  position:absolute;right:6px;top:50%;transform:translateY(-50%);
-  width:34px;height:34px;border-radius:var(--r2);
-  background:var(--accent);border:none;
-  color:#fff;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:all var(--t-fast);
-}
-.qe-btn:active{transform:translateY(-50%) scale(0.91)}
-.qe-btn svg{width:14px;height:14px;stroke-width:2.5}
-.parse-ok{
-  font-size:12px;color:var(--pos);
-  background:var(--pos-dim);border:1px solid rgba(61,153,112,0.2);
-  border-radius:var(--r2);padding:6px 10px;
-  margin-bottom:var(--s2);display:none;
-  font-family:var(--font-num);
-}
-.parse-err{
-  font-size:12px;color:var(--neg);
-  background:var(--neg-dim);border:1px solid rgba(200,68,68,0.2);
-  border-radius:var(--r2);padding:6px 10px;
-  margin-bottom:var(--s2);display:none;
-}
 .qe-hints{
   background:var(--accent-dim);border:1px solid var(--accent-mid);
   border-radius:var(--r2);padding:var(--s3) var(--s4);
+}
+.mic-hint-bar{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--border-2);
+  border-radius:var(--r2);padding:8px var(--s3);
+  margin-bottom:var(--s3);
+  font-size:12px;color:var(--text-2);
+}
+.mic-hint-bar svg{width:13px;height:13px;stroke:var(--accent);stroke-width:2;flex-shrink:0}
+.mic-hint-bar code{
+  font-family:var(--font-num);font-size:11.5px;
+  color:var(--text-1);background:var(--bg-3);
+  padding:1px 6px;border-radius:var(--r1);
 }
 .qe-hint-title{font-size:10px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--accent);margin-bottom:var(--s2)}
 .qe-hint-row{display:flex;align-items:baseline;gap:8px;margin-bottom:5px;font-size:12px;color:var(--text-2)}
@@ -790,25 +760,6 @@ input,select,button{font-family:inherit}
   box-shadow:0 4px 20px rgba(0,0,0,0.3);
   pointer-events:none;
 }
-.qe-voice-btn{
-  position:absolute;right:48px;top:50%;transform:translateY(-50%);
-  width:34px;height:34px;border-radius:var(--r2);
-  background:none;border:1px solid var(--border-2);
-  color:var(--text-2);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:all var(--t-fast);
-}
-.qe-voice-btn:hover{border-color:var(--accent);color:var(--accent)}
-.qe-voice-btn svg{width:14px;height:14px;stroke-width:2}
-.qe-voice-btn.listening{
-  background:var(--neg);border-color:var(--neg);color:#fff;
-  animation:voicePulse 1s ease infinite;
-}
-@keyframes voicePulse{0%,100%{box-shadow:0 0 0 0 rgba(200,68,68,0.4)}50%{box-shadow:0 0 0 6px rgba(200,68,68,0)}}
-.voice-status{font-size:11px;color:var(--text-2);text-align:center;padding:4px 0;display:none}
-.voice-status.active{display:block;color:var(--neg)}
-.voice-status.heard{display:block;color:var(--pos)}
-
 /* ── DATE CHIP ───────────────────────────── */
 .date-chip{
   font-size:11px;font-weight:600;color:var(--text-2);
@@ -1004,23 +955,17 @@ input,select,button{font-family:inherit}
 
       <!-- Quick entry panel -->
       <div id="panel-quick" class="mode-panel active">
-        <div class="qe-wrap">
-          <input class="qe-input" id="quickInput" placeholder="e.g.  150  or  200 30t  or  150 20t 18%" autocomplete="off" oninput="previewParse()" onkeydown="if(event.key==='Enter')submitQuick()">
-          <button type="button" class="qe-btn" onclick="submitQuick()" aria-label="Add trip">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
+        <div class="mic-hint-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span><code>150</code> · <code>150 20 tip</code> · <code>150 20 tip 18 commission</code></span>
         </div>
-        <div class="voice-status" id="voiceStatus"></div>
-        <div class="parse-ok" id="parsePreview" role="status"></div>
-        <div class="parse-err" id="parseError" role="alert"></div>
         <div class="qe-hints">
           <div class="qe-hint-title">Format Guide · or just speak it</div>
           <div class="qe-hint-row"><code>150</code><span>₱150 fare, default 20% comm</span></div>
           <div class="qe-hint-row"><code>147 150</code><span>fare ₱147, customer gave ₱150 → tip ₱3</span></div>
-          <div class="qe-hint-row"><code>150 20t</code><span>+ ₱20 tip &nbsp;<span style="opacity:0.5">or</span>&nbsp; 20tip</span></div>
-          <div class="qe-hint-row"><code>150 50b</code><span>+ ₱50 bonus &nbsp;<span style="opacity:0.5">or</span>&nbsp; 50bonus</span></div>
-          <div class="qe-hint-row"><code>200 15%</code><span>custom commission rate</span></div>
-          <div class="qe-hint-row"><code>180 30t 50b 18%</code><span>all combined</span></div>
+          <div class="qe-hint-row"><code>150 20 tip</code><span>₱150 fare + ₱20 tip</span></div>
+          <div class="qe-hint-row"><code>150 18 commission</code><span>₱150 fare, 18% commission</span></div>
+          <div class="qe-hint-row"><code>150 20 tip 18 commission</code><span>fare + tip + custom comm</span></div>
         </div>
       </div>
 
@@ -1030,7 +975,6 @@ input,select,button{font-family:inherit}
           <div class="field"><label>Fare (₱)</label><input type="number" id="tripFare" placeholder="0.00" min="0" inputmode="decimal"></div>
           <div class="field"><label>Tip (₱)</label><input type="number" id="tripTip" placeholder="0.00" min="0" inputmode="decimal"></div>
           <div class="field"><label>Commission %</label><input type="number" id="tripComm" placeholder="20" min="0" max="100" inputmode="decimal"></div>
-          <div class="field"><label>Bonus (₱)</label><input type="number" id="tripBonus" placeholder="0.00" min="0" inputmode="decimal"></div>
         </div>
         <button class="btn btn-primary" onclick="addTripForm()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="14" height="14" style="stroke-width:2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1155,7 +1099,6 @@ input,select,button{font-family:inherit}
       <div class="dv-table">
         <div class="dv-row"><span class="dv-lbl">Total Fares</span><span class="dv-val c-pos" id="bFares">₱0.00</span></div>
         <div class="dv-row"><span class="dv-lbl">Total Tips</span><span class="dv-val c-pos" id="bTips">₱0.00</span></div>
-        <div class="dv-row"><span class="dv-lbl">Total Bonuses</span><span class="dv-val c-pos" id="bBonus">₱0.00</span></div>
         <div class="dv-row"><span class="dv-lbl">Commission</span><span class="dv-val c-neg" id="bComm">−₱0.00</span></div>
         <div class="dv-row"><span class="dv-lbl">Gross After Commission</span><span class="dv-val" id="bGross">₱0.00</span></div>
       </div>
@@ -1383,9 +1326,9 @@ function dateLabel(k){const d=new Date(k+'T00:00:00');return d.toLocaleDateStrin
 function weekLabel(k){const d=new Date(k+'T00:00:00');const e=new Date(d);e.setDate(e.getDate()+6);return d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})+' – '+e.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'});}
 function calcDay(data){
   const trips=data.trips||[],exp=data.expenses||{};
-  const tF=trips.reduce((s,t)=>s+t.fare,0),tTip=trips.reduce((s,t)=>s+t.tip,0),tBon=trips.reduce((s,t)=>s+t.bonus,0),tComm=trips.reduce((s,t)=>s+t.commAmt,0);
-  const gross=tF-tComm+tTip+tBon,totalExp=(exp.gas||0)+(exp.food||0)+(exp.park||0)+(exp.maint||0)+(exp.other||0);
-  return{totalFares:tF,totalTips:tTip,totalBonus:tBon,totalComm:tComm,gross,totalExp,takeHome:gross-totalExp,tripCount:trips.length};
+  const tF=trips.reduce((s,t)=>s+t.fare,0),tTip=trips.reduce((s,t)=>s+t.tip,0),tComm=trips.reduce((s,t)=>s+t.commAmt,0);
+  const gross=tF-tComm+tTip,totalExp=(exp.gas||0)+(exp.food||0)+(exp.park||0)+(exp.maint||0)+(exp.other||0);
+  return{totalFares:tF,totalTips:tTip,totalComm:tComm,gross,totalExp,takeHome:gross-totalExp,tripCount:trips.length};
 }
 
 // ════════════════════════════════════════
@@ -1540,8 +1483,8 @@ function renderBatchQueue(){
   if(count)count.textContent=`${total} screenshot${total!==1?'s':''} scanned · ${doneCount} ready`;
 
   list.innerHTML=grabQueue.map((item,idx)=>{
-    const p=item.parsed||{net:0,serviceFee:0,promo:0,tip:0,bonus:0};
-    const takeHome=(p.net||0)+(p.tip||0)+(p.bonus||0);
+    const p=item.parsed||{net:0,serviceFee:0,promo:0,tip:0};
+    const takeHome=(p.net||0)+(p.tip||0);
     const statusText={
       pending:'Waiting...',
       processing:'Scanning...',
@@ -1566,7 +1509,6 @@ function renderBatchQueue(){
         <div class="gqc-field"><label>Svc Fee (₱)</label><input type="number" value="${p.serviceFee||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'serviceFee',this.value)"></div>
         <div class="gqc-field"><label>Promo (₱)</label><input type="number" value="${p.promo||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'promo',this.value)"></div>
         <div class="gqc-field"><label>Tip (₱)</label><input type="number" value="${p.tip||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'tip',this.value)"></div>
-        <div class="gqc-field"><label>Bonus (₱)</label><input type="number" value="${p.bonus||''}" placeholder="0" inputmode="decimal" onchange="updateQueueItem(${item.id},'bonus',this.value)"></div>
       </div>`:''}
     </div>`;
   }).join('');
@@ -1588,7 +1530,7 @@ function updateQueueItem(id,field,val){
     const netEl=card.querySelector('.gqc-net');
     if(netEl){
       const p=item.parsed;
-      netEl.textContent=fmt((p.net||0)+(p.tip||0)+(p.bonus||0));
+      netEl.textContent=fmt((p.net||0)+(p.tip||0));
     }
   }
 }
@@ -1599,14 +1541,14 @@ function saveAllGrabTrips(){
 
   ready.forEach(item=>{
     const p=item.parsed;
-    const net=p.net||0,fee=p.serviceFee||0,promo=p.promo||0,tip=p.tip||0,bonus=p.bonus||0;
+    const net=p.net||0,fee=p.serviceFee||0,promo=p.promo||0,tip=p.tip||0;
     if(net<=0)return;
     const passFare=net+fee;
     const commAmt=fee;
     const commRate=passFare>0?Math.round((fee/passFare)*1000)/10:0;
-    const tripNet=net+tip+bonus;
+    const tripNet=net+tip;
     todayData.trips.push({
-      fare:passFare,tip,commRate,commAmt,bonus,
+      fare:passFare,tip,commRate,commAmt,
       net:tripNet,id:Date.now()+Math.random(),
       _source:'grab',_promo:promo
     });
@@ -1774,7 +1716,6 @@ function saveAllListTrips(){
       tip:0,
       commRate:COMM,
       commAmt,
-      bonus:0,
       net:t.amount,
       id:Date.now()+Math.random(),
       _source:'grab-list',
@@ -1841,7 +1782,7 @@ function parseGrabText(text){
     return 0;
   }
 
-  // 1. Total net earnings (driver take-home before tip/bonus)
+  // 1. Total net earnings (driver take-home before tip)
   const net=findAfter(['total net earnings','total net earn']);
 
   // 2. Service fee TOTAL — scan inside "service fee" section for "total" line
@@ -1885,12 +1826,9 @@ function parseGrabText(text){
   }
 
   // 4. Tip
-  const tip=findAfter(['tip'],['total','bonus']);
+  const tip=findAfter(['tip'],['total']);
 
-  // 5. Bonus / incentive
-  const bonus=findAfter(['bonus','incentive','reward'],['total']);
-
-  return{net,serviceFee,promo,tip,bonus};
+  return{net,serviceFee,promo,tip};
 }
 
 function grabPreview(){
@@ -1898,21 +1836,18 @@ function grabPreview(){
   const fee=parseFloat(document.getElementById('grabServiceFee')?.value)||0;
   const promo=parseFloat(document.getElementById('grabPromo')?.value)||0;
   const tip=parseFloat(document.getElementById('grabTip')?.value)||0;
-  const bonus=parseFloat(document.getElementById('grabBonus')?.value)||0;
-  const takeHome=net+tip+bonus;
+  const takeHome=net+tip;
   const gf=document.getElementById('gp-fare');
   const gc=document.getElementById('gp-comm');
   const gpr=document.getElementById('gp-promo');
   const gpr_row=document.getElementById('gp-promo-row');
   const gt=document.getElementById('gp-tip');
-  const gb=document.getElementById('gp-bonus');
   const gn=document.getElementById('gp-net');
   if(gf)gf.textContent=fmt(net);
   if(gc)gc.textContent='−'+fmt(fee);
   if(gpr){gpr.textContent=promo>0?'−'+fmt(promo)+' (Grab pays)':'₱0.00';}
   if(gpr_row)gpr_row.style.display=promo>0?'flex':'none';
   if(gt)gt.textContent=fmt(tip);
-  if(gb)gb.textContent=fmt(bonus);
   if(gn)gn.textContent=fmt(takeHome);
 }
 
@@ -1979,12 +1914,8 @@ function startHoldVoice(){
   voiceRecognition.onresult=e=>{
     const transcript=Array.from(e.results).map(r=>r[0].transcript).join(' ');
     lastTranscript=transcript;
-    const converted=wordsToNumbers(transcript);
-    // Show live feedback
+    // Show live feedback only — don't touch quickInput
     showFabStatus('🎤 "'+transcript+'"');
-    // Pre-fill input for preview
-    document.getElementById('quickInput').value=converted;
-    previewParse();
   };
 
   voiceRecognition.onend=()=>{
@@ -1992,38 +1923,28 @@ function startHoldVoice(){
     document.getElementById('floatMic').classList.remove('holding');
     document.getElementById('floatMicLabel').textContent='Hold';
 
-    const raw=document.getElementById('quickInput').value.trim();
-    if(!raw){hideFabStatus();return;}
+    if(!lastTranscript){hideFabStatus();return;}
 
-    const converted=wordsToNumbers(raw);
-    document.getElementById('quickInput').value=converted;
+    const converted=wordsToNumbers(lastTranscript);
     const r=parseQuick(converted);
 
     if(r&&!r.error){
-      // Navigate to today tab and submit
-      const todayBtn=document.querySelector('.nav-btn');
-      if(!document.getElementById('page-today').classList.contains('active')){
-        showPage('today',todayBtn);
-      }
-      submitQuick();
-      showFabStatus('✓ Trip added — ₱'+r.fare+(r.tip>0?' + ₱'+r.tip+' tip':''));
-      setTimeout(hideFabStatus,5000);
+      hideFabStatus();
+      const trip={...r,id:Date.now()};
+      showTripToast(trip);
     } else {
       // Best-effort: grab any number
       const anyNum=converted.match(/\d+(?:\.\d+)?/);
       if(anyNum){
-        document.getElementById('quickInput').value=anyNum[0];
-        const todayBtn=document.querySelector('.nav-btn');
-        if(!document.getElementById('page-today').classList.contains('active')){
-          showPage('today',todayBtn);
-        }
-        submitQuick();
-        showFabStatus('✓ Saved ₱'+anyNum[0]+' from "'+lastTranscript+'"');
-        setTimeout(hideFabStatus,5000);
+        const fare=parseFloat(anyNum[0]);
+        const commRate=DEFAULT_COMM;
+        const commAmt=fare*(commRate/100);
+        const trip={fare,tip:0,commRate,commAmt,net:fare-commAmt,id:Date.now()};
+        hideFabStatus();
+        showTripToast(trip);
       } else {
         showFabStatus('Nothing recognised — try again');
         setTimeout(hideFabStatus,2000);
-        document.getElementById('quickInput').value='';
       }
     }
   };
@@ -2087,7 +2008,6 @@ function wordsToNumbers(text){
 
   // Normalize spoken keywords to app format
   s=s.replace(/\btip\b/g,'t');
-  s=s.replace(/\bbonus\b/g,'b');
   s=s.replace(/\bpercent\b/g,'%');
   s=s.replace(/\bcommission\b/g,'%');
 
@@ -2102,55 +2022,47 @@ function wordsToNumbers(text){
 function parseQuick(raw){
   const s=raw.trim().toLowerCase();
   if(!s)return null;
-  let fare=null,tip=0,comm=DEFAULT_COMM,bonus=0;
-  const cM=s.match(/(\d+(?:\.\d+)?)\s*%/);if(cM)comm=parseFloat(cM[1]);
-  // tip: accept 20tip, 20t
-  const tM=s.match(/(\d+(?:\.\d+)?)\s*tip\b/)||s.match(/(\d+(?:\.\d+)?)\s*t\b/);if(tM)tip=parseFloat(tM[1]);
-  // bonus: accept 50bonus, 50bon, 50b
-  const bM=s.match(/(\d+(?:\.\d+)?)\s*bon(?:us)?\b/)||s.match(/(\d+(?:\.\d+)?)\s*b\b/);if(bM)bonus=parseFloat(bM[1]);
-  let stripped=s
-    .replace(/\d+(?:\.\d+)?\s*%/g,'')
-    .replace(/\d+(?:\.\d+)?\s*tip\b/g,'')
-    .replace(/\d+(?:\.\d+)?\s*t\b/g,'')
-    .replace(/\d+(?:\.\d+)?\s*bon(?:us)?\b/g,'')
-    .replace(/\d+(?:\.\d+)?\s*b\b/g,'')
-    .trim();
+  let fare=null,tip=0,comm=DEFAULT_COMM;
 
-  // Check for two bare numbers: "147 150" → fare=147, customer gave 150, tip=3
-  // Only applies when no tip/bonus keyword was already detected
+  // Match "tip NUMBER" or "NUMBER tip" (spoken as "tip twenty" or "twenty tip")
+  const tipAfter=s.match(/\btip\s+(\d+(?:\.\d+)?)/);
+  const tipBefore=s.match(/(\d+(?:\.\d+)?)\s+tip\b/);
+  if(tipAfter)tip=parseFloat(tipAfter[1]);
+  else if(tipBefore)tip=parseFloat(tipBefore[1]);
+
+  // Match "commission NUMBER" or "NUMBER commission" or "NUMBER %" or "%NUMBER"
+  const commAfter=s.match(/\bcommission\s+(\d+(?:\.\d+)?)/);
+  const commBefore=s.match(/(\d+(?:\.\d+)?)\s+commission\b/);
+  const commPct=s.match(/(\d+(?:\.\d+)?)\s*%/);
+  if(commAfter)comm=parseFloat(commAfter[1]);
+  else if(commBefore)comm=parseFloat(commBefore[1]);
+  else if(commPct)comm=parseFloat(commPct[1]);
+
+  // Strip tip and commission parts to isolate the fare
+  let stripped=s
+    .replace(/\btip\s+\d+(?:\.\d+)?/g,'')
+    .replace(/\d+(?:\.\d+)?\s+tip\b/g,'')
+    .replace(/\bcommission\s+\d+(?:\.\d+)?/g,'')
+    .replace(/\d+(?:\.\d+)?\s+commission\b/g,'')
+    .replace(/\d+(?:\.\d+)?\s*%/g,'')
+    .replace(/\s+/g,' ').trim();
+
+  // Check for two bare numbers: "147 150" → fare ₱147, customer gave ₱150 → tip ₱3
   const bareNums=stripped.match(/(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)/);
-  if(bareNums&&tip===0&&bonus===0){
-    const n1=parseFloat(bareNums[1]);
-    const n2=parseFloat(bareNums[2]);
-    // Interpret as fare + customer amount — tip is the difference
-    if(n2>n1){
-      fare=n1;
-      tip=Math.round((n2-n1)*100)/100;
-    } else {
-      // Second number is smaller or equal — just use first as fare
-      fare=n1;
-    }
+  if(bareNums&&tip===0){
+    const n1=parseFloat(bareNums[1]),n2=parseFloat(bareNums[2]);
+    if(n2>n1){fare=n1;tip=Math.round((n2-n1)*100)/100;}
+    else{fare=n1;}
   } else {
     const fM=stripped.match(/(\d+(?:\.\d+)?)/);if(fM)fare=parseFloat(fM[1]);
   }
 
-  if(!fare||fare<=0)return{error:'No fare found — start with the amount, e.g. 150 20t'};
+  if(!fare||fare<=0)return{error:'No fare found — say the amount first, e.g. "150 tip 20"'};
   const commAmt=fare*(comm/100);
-  return{fare,tip,commRate:comm,commAmt,bonus,net:fare-commAmt+tip+bonus};
+  return{fare,tip,commRate:comm,commAmt,net:fare-commAmt+tip};
 }
-function previewParse(){
-  const raw=document.getElementById('quickInput').value;
-  const ok=document.getElementById('parsePreview'),err=document.getElementById('parseError');
-  if(!raw.trim()){ok.style.display='none';err.style.display='none';return;}
-  const r=parseQuick(raw);
-  if(!r){ok.style.display='none';err.style.display='none';return;}
-  if(r.error){err.textContent=r.error;err.style.display='block';ok.style.display='none';return;}
-  err.style.display='none';ok.style.display='block';
-  ok.textContent=`Fare ${fmt(r.fare)}  ·  Tip ${fmt(r.tip)}  ·  Comm ${r.commRate}% (${fmt(r.commAmt)})${r.bonus>0?'  ·  Bonus '+fmt(r.bonus):''}  →  Net ${fmt(r.net)}`;
-}
-// ════════════════════════════════════════
-// TRIP ADDED TOAST (with undo — saves only after 4s)
-// ════════════════════════════════════════
+function previewParse(){/* no-op: quick input removed */}
+function submitQuick(){/* no-op: quick input removed */}
 let pendingTrip=null;      // the trip object waiting to be confirmed
 let tripToastTimer=null;
 
@@ -2164,7 +2076,6 @@ function showTripToast(trip){
   const parts=[];
   parts.push(fmt(trip.fare)+' fare');
   if(trip.tip>0)parts.push(fmt(trip.tip)+' tip');
-  if(trip.bonus>0)parts.push(fmt(trip.bonus)+' bonus');
   parts.push(trip.commRate+'% comm');
   const details=parts.join(' · ');
 
@@ -2202,16 +2113,6 @@ function hideTripToast(){
   document.getElementById('tripToast').classList.remove('show');
 }
 
-function submitQuick(){
-  const raw=document.getElementById('quickInput').value;
-  const r=parseQuick(raw);
-  if(!r||r.error)return;
-  const trip={...r,id:Date.now()};
-  document.getElementById('quickInput').value='';
-  document.getElementById('parsePreview').style.display='none';
-  showTripToast(trip);
-}
-
 // ════════════════════════════════════════
 // DETAILED FORM
 // ════════════════════════════════════════
@@ -2220,11 +2121,10 @@ function addTripForm(){
   const tip=parseFloat(document.getElementById('tripTip').value)||0;
   const commInput=parseFloat(document.getElementById('tripComm').value);
   const commRate=isNaN(commInput)?DEFAULT_COMM:commInput;
-  const bonus=parseFloat(document.getElementById('tripBonus').value)||0;
   if(fare<=0){showToastSimple('Enter a fare amount first.');return;}
   const commAmt=fare*(commRate/100);
-  const trip={fare,tip,commRate,commAmt,bonus,net:fare-commAmt+tip+bonus,id:Date.now()};
-  ['tripFare','tripTip','tripBonus'].forEach(id=>document.getElementById(id).value='');
+  const trip={fare,tip,commRate,commAmt,net:fare-commAmt+tip,id:Date.now()};
+  ['tripFare','tripTip'].forEach(id=>document.getElementById(id).value='');
   showTripToast(trip);
 }
 
@@ -2260,7 +2160,6 @@ function renderTrips(){
           <div class="field"><label>Fare (₱)</label><input type="number" id="ef-fare-${t.id}" value="${t.fare}" inputmode="decimal"></div>
           <div class="field"><label>Tip (₱)</label><input type="number" id="ef-tip-${t.id}" value="${t.tip}" inputmode="decimal"></div>
           <div class="field"><label>Commission %</label><input type="number" id="ef-comm-${t.id}" value="${t.commRate}" inputmode="decimal"></div>
-          <div class="field"><label>Bonus (₱)</label><input type="number" id="ef-bonus-${t.id}" value="${t.bonus}" inputmode="decimal"></div>
         </div>
         <div class="btn-row" style="margin-top:0">
           <button class="btn-sm ok" onclick="saveEdit(${t.id})" style="flex:1">Save</button>
@@ -2279,7 +2178,7 @@ function renderTrips(){
         <div class="trip-idx">${tripNum}</div>
         <div class="trip-body">
           <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">${fmt(t.fare)} fare</div>
-          <div class="trip-meta">tip ${fmt(t.tip)} · ${t._source==='grab'?'svc fee −'+fmt(t.commAmt):t._source==='grab-list'?'earnings list import'+(t._dest?' · '+t._dest.substring(0,20):''):t.commRate+'% comm'}${t.bonus>0?' · bonus '+fmt(t.bonus):''}</div>
+          <div class="trip-meta">tip ${fmt(t.tip)} · ${t._source==='grab'?'svc fee −'+fmt(t.commAmt):t._source==='grab-list'?'earnings list import'+(t._dest?' · '+t._dest.substring(0,20):''):t.commRate+'% comm'}</div>
         </div>
         <div class="trip-net">${fmt(t.net)}</div>
         <div class="trip-edit-icon">
@@ -2307,10 +2206,9 @@ function saveEdit(id){
   const fare=parseFloat(document.getElementById('ef-fare-'+id).value)||0;
   const tip=parseFloat(document.getElementById('ef-tip-'+id).value)||0;
   const commRate=parseFloat(document.getElementById('ef-comm-'+id).value)||DEFAULT_COMM;
-  const bonus=parseFloat(document.getElementById('ef-bonus-'+id).value)||0;
   if(fare<=0){showToastSimple('Fare must be greater than 0.');return;}
   const commAmt=fare*(commRate/100);
-  todayData.trips[idx]={...todayData.trips[idx],fare,tip,commRate,commAmt,bonus,net:fare-commAmt+tip+bonus};
+  todayData.trips[idx]={...todayData.trips[idx],fare,tip,commRate,commAmt,net:fare-commAmt+tip};
   saveTodayData(todayData);
   editingTripId=null;
   renderTrips();recalc();
@@ -2472,12 +2370,11 @@ function recalc(){
   }
 
   document.getElementById('summarySubtitle').textContent=c.tripCount?`${c.tripCount} trip${c.tripCount!==1?'s':''} · ${fmt(c.totalComm)} comm · ${fmt(c.totalExp)} expenses`:'No trips logged yet';
-  document.getElementById('grossEarn').textContent=fmtShort(c.totalFares+c.totalTips+c.totalBonus);
+  document.getElementById('grossEarn').textContent=fmtShort(c.totalFares+c.totalTips);
   document.getElementById('totalDeduct').textContent=fmtShort(c.totalComm+c.totalExp);
   document.getElementById('tripCount').textContent=c.tripCount;
   document.getElementById('bFares').textContent=fmt(c.totalFares);
   document.getElementById('bTips').textContent=fmt(c.totalTips);
-  document.getElementById('bBonus').textContent=fmt(c.totalBonus);
   document.getElementById('bComm').textContent='−'+fmt(c.totalComm);
   document.getElementById('bGross').textContent=fmt(c.gross);
   document.getElementById('bGas').textContent='−'+fmt(todayData.expenses.gas||0);
@@ -2628,7 +2525,6 @@ function renderDayModal(){
         <div class="field"><label>Fare (₱)</label><input type="number" id="mef-fare-${t.id}" value="${t.fare}" inputmode="decimal"></div>
         <div class="field"><label>Tip (₱)</label><input type="number" id="mef-tip-${t.id}" value="${t.tip}" inputmode="decimal"></div>
         <div class="field"><label>Commission %</label><input type="number" id="mef-comm-${t.id}" value="${t.commRate}" inputmode="decimal"></div>
-        <div class="field"><label>Bonus (₱)</label><input type="number" id="mef-bonus-${t.id}" value="${t.bonus}" inputmode="decimal"></div>
       </div>
       <div class="btn-row" style="margin-top:0">
         <button class="btn-sm ok" onclick="saveModalEdit(${t.id})" style="flex:1">Save</button>
@@ -2641,7 +2537,7 @@ function renderDayModal(){
       <div class="trip-idx">${i+1}</div>
       <div class="trip-body">
         <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">${fmt(t.fare)} fare</div>
-        <div class="trip-meta">tip ${fmt(t.tip)} · ${t.commRate}% comm${t.bonus>0?' · bonus '+fmt(t.bonus):''}</div>
+        <div class="trip-meta">tip ${fmt(t.tip)} · ${t.commRate}% comm</div>
       </div>
       <div class="trip-net">${fmt(t.net)}</div>
       <div class="trip-edit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
@@ -2654,7 +2550,6 @@ function renderDayModal(){
       <div class="field"><label>Fare (₱)</label><input type="number" id="madd-fare" placeholder="0.00" inputmode="decimal"></div>
       <div class="field"><label>Tip (₱)</label><input type="number" id="madd-tip" placeholder="0.00" inputmode="decimal"></div>
       <div class="field"><label>Commission %</label><input type="number" id="madd-comm" placeholder="20" inputmode="decimal"></div>
-      <div class="field"><label>Bonus (₱)</label><input type="number" id="madd-bonus" placeholder="0.00" inputmode="decimal"></div>
     </div>
     <button class="btn btn-primary" onclick="addModalTrip()" style="font-size:12px;min-height:40px">Add Trip</button>
   </div>`;
@@ -2684,10 +2579,9 @@ function saveModalEdit(id){
   const fare=parseFloat(document.getElementById('mef-fare-'+id).value)||0;
   const tip=parseFloat(document.getElementById('mef-tip-'+id).value)||0;
   const commRate=parseFloat(document.getElementById('mef-comm-'+id).value)||DEFAULT_COMM;
-  const bonus=parseFloat(document.getElementById('mef-bonus-'+id).value)||0;
   if(fare<=0){showToastSimple('Fare must be greater than 0.');return;}
   const commAmt=fare*(commRate/100);
-  data.trips[idx]={...data.trips[idx],fare,tip,commRate,commAmt,bonus,net:fare-commAmt+tip+bonus};
+  data.trips[idx]={...data.trips[idx],fare,tip,commRate,commAmt,net:fare-commAmt+tip};
   db.days[modalDayKey]=data;saveDB(db);
   modalEditingId=null;renderDayModal();renderHistory();
   showToastSimple('Trip updated.');
@@ -2725,11 +2619,10 @@ function addModalTrip(){
   const tip=parseFloat(document.getElementById('madd-tip').value)||0;
   const commInput=parseFloat(document.getElementById('madd-comm').value);
   const commRate=isNaN(commInput)?DEFAULT_COMM:commInput;
-  const bonus=parseFloat(document.getElementById('madd-bonus').value)||0;
   if(fare<=0){showToastSimple('Enter a fare amount first.');return;}
   const commAmt=fare*(commRate/100);
   const db=loadDB(),data=db.days[modalDayKey];if(!data)return;
-  data.trips.push({fare,tip,commRate,commAmt,bonus,net:fare-commAmt+tip+bonus,id:Date.now()});
+  data.trips.push({fare,tip,commRate,commAmt,net:fare-commAmt+tip,id:Date.now()});
   db.days[modalDayKey]=data;saveDB(db);
   renderDayModal();renderHistory();showToastSimple('Trip added.');
 }
@@ -2850,8 +2743,8 @@ function printDayReport(){
     <div class="kpi"><div class="kv">${c.tripCount?fmt(c.takeHome/c.tripCount):'₱0'}</div><div class="kl">Avg / Trip</div></div>
   </div>
   <div class="sec-title">Trip Details</div>
-  <table><thead><tr><th>#</th><th>Fare</th><th>Tip</th><th>Bonus</th><th>Comm %</th><th>Commission</th><th>Net</th></tr></thead><tbody>
-    ${trips.map((t,i)=>`<tr><td>${i+1}</td><td>${fmt(t.fare)}</td><td>${fmt(t.tip)}</td><td>${fmt(t.bonus)}</td><td>${t.commRate}%</td><td>−${fmt(t.commAmt)}</td><td>${fmt(t.net)}</td></tr>`).join('')}
+  <table><thead><tr><th>#</th><th>Fare</th><th>Tip</th><th>Comm %</th><th>Commission</th><th>Net</th></tr></thead><tbody>
+    ${trips.map((t,i)=>`<tr><td>${i+1}</td><td>${fmt(t.fare)}</td><td>${fmt(t.tip)}</td><td>${t.commRate}%</td><td>−${fmt(t.commAmt)}</td><td>${fmt(t.net)}</td></tr>`).join('')}
     <tr class="tr"><td colspan="6">Total Take-Home</td><td>${fmt(c.takeHome)}</td></tr>
   </tbody></table>
   <div class="sec-title">Expenses</div>
