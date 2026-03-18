@@ -1896,7 +1896,7 @@ function holdVoiceEnd(){
   const label=document.getElementById('floatMicLabel');
   btn.classList.remove('holding');
   if(label)label.textContent='Hold';
-  setTimeout(()=>{if(voiceRecognition)voiceRecognition.stop();},300);
+  setTimeout(()=>{if(voiceRecognition)voiceRecognition.stop();},500);
 }
 let _micInfoTimer=null;
 
@@ -1922,8 +1922,9 @@ function startHoldVoice(){
         interimTranscript+=e.results[i][0].transcript;
       }
     }
-    // Show live feedback
-    showFabStatus('🎤 "'+(finalTranscript+interimTranscript).trim()+'"');
+    // Show live feedback using whichever we have
+    const display=(finalTranscript+interimTranscript).trim();
+    showFabStatus('🎤 "'+display+'"');
   };
 
   voiceRecognition.onend=()=>{
@@ -2002,13 +2003,14 @@ function cleanVoiceInput(text){
   // Normalize hyphens: "one-fifty" → "one fifty", "one-seventy" → "one seventy"
   s=s.replace(/-/g,' ');
 
-  // Split any run-together digits: "150170" → "150 170"
-  s=s.replace(/(\d{3,})(\d{3})/g,'$1 $2');
-  // More aggressive: split long digit strings at natural breakpoints
-  s=s.replace(/\b(\d{6,})\b/g,m=>{
-    // Try splitting into groups of 3
-    return m.replace(/(\d{3})(?=\d)/g,'$1 ');
-  });
+  // Split run-together digit groups like "150170" → "150 170"
+  // Handle 6-digit joins of two 3-digit numbers
+  s=s.replace(/\b(\d{3})(\d{3})\b/g,'$1 $2');
+  // Handle 5-digit joins: "15020" could be "150 20"
+  s=s.replace(/\b(\d{3})(\d{2})\b/g,'$1 $2');
+  // Handle 4-digit joins that look like two 2-digit numbers: "2018" → leave (could be year), but "1520" → "150 20" is ambiguous — skip
+  // Handle any remaining 7+ digit strings
+  s=s.replace(/\b(\d{3,4})(\d{3})\b/g,'$1 $2');
 
   // Handle "hundred" combos: "one hundred fifty" → 150
   s=s.replace(/\b(\w+)\s+hundred(?:\s+and)?\s+(\w+)\b/g,(m,a,b)=>{
