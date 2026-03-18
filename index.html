@@ -176,7 +176,23 @@ input,select,button{font-family:inherit}
   border:1px solid var(--border-2);
   border-radius:var(--r4);
   position:relative;overflow:hidden;
+  cursor:pointer;
+  transition:border-color var(--t-fast),transform var(--t-fast);
+  user-select:none;
 }
+.hero:hover{border-color:var(--border-3)}
+.hero:active{transform:scale(0.99)}
+.hero-eye{
+  position:absolute;top:var(--s4);right:var(--s4);
+  width:28px;height:28px;border-radius:var(--r1);
+  background:var(--bg-3);border:1px solid var(--border-2);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-3);transition:all var(--t-fast);
+  flex-shrink:0;
+}
+.hero-eye svg{width:13px;height:13px;stroke-width:1.75}
+.hero:hover .hero-eye{border-color:var(--border-3);color:var(--text-2)}
+.hero-masked{letter-spacing:3px;font-size:28px!important;vertical-align:middle}
 .hero::after{
   content:'';position:absolute;
   top:0;left:0;right:0;height:2px;
@@ -197,6 +213,7 @@ input,select,button{font-family:inherit}
 }
 .hero-amount .currency{font-size:22px;opacity:0.55;vertical-align:super;margin-right:2px}
 .hero-sub{font-size:12px;color:var(--text-2)}
+@keyframes tipPop{from{opacity:0;transform:scale(0.7) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
 
 /* ── STAT ROW ────────────────────────────── */
 .stat-row{
@@ -705,6 +722,27 @@ input,select,button{font-family:inherit}
   display:none;
 }
 
+/* ── VOICE BUTTON ────────────────────────── */
+.qe-voice-btn{
+  position:absolute;right:48px;top:50%;transform:translateY(-50%);
+  width:34px;height:34px;border-radius:var(--r2);
+  background:none;border:1px solid var(--border-2);
+  color:var(--text-2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--t-fast);
+}
+.qe-voice-btn:hover{border-color:var(--accent);color:var(--accent)}
+.qe-voice-btn svg{width:14px;height:14px;stroke-width:2}
+.qe-voice-btn.listening{
+  background:var(--neg);border-color:var(--neg);color:#fff;
+  animation:voicePulse 1s ease infinite;
+}
+@keyframes voicePulse{0%,100%{box-shadow:0 0 0 0 rgba(200,68,68,0.4)}50%{box-shadow:0 0 0 6px rgba(200,68,68,0)}}
+.voice-status{font-size:11px;color:var(--text-2);text-align:center;padding:4px 0;display:none}
+.voice-status.active{display:block;color:var(--neg)}
+.voice-status.heard{display:block;color:var(--pos)}
+
+/* ── DATE CHIP ───────────────────────────── */
 .date-chip{
   font-size:11px;font-weight:600;color:var(--text-2);
   background:var(--surface-2);border:1px solid var(--border-2);
@@ -860,10 +898,21 @@ input,select,button{font-family:inherit}
     <button class="past-banner-back" onclick="goToToday()">Back to Today</button>
   </div>
 
-  <div class="hero">
+  <div class="hero" onclick="toggleHeroMask()">
     <div class="hero-label">Take-Home Today</div>
-    <div class="hero-amount"><span class="currency">₱</span><span id="takeHome">0.00</span></div>
-    <div class="hero-sub" id="summarySubtitle">No trips logged yet</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="hero-amount"><span class="currency">₱</span><span id="takeHome">0.00</span></div>
+      <div id="tipsBadge" style="display:none;background:rgba(61,153,112,0.12);border:1px solid rgba(61,153,112,0.28);border-radius:20px;padding:4px 12px;align-items:center;gap:4px;animation:tipPop 0.4s cubic-bezier(0.34,1.5,0.64,1)">
+        <span style="font-size:10px;color:var(--pos);font-weight:700;letter-spacing:0.04em;text-transform:uppercase;font-family:var(--font-ui)">Tips</span>
+        <span style="font-size:12px;color:var(--pos);font-weight:600;font-family:var(--font-num)" id="tipsAmount"></span>
+        <span style="font-size:12px;line-height:1">🎉</span>
+      </div>
+    </div>
+    <div class="hero-sub" id="summarySubtitle" style="margin-top:4px">No trips logged yet</div>
+    <!-- Eye icon — shows users this is tappable -->
+    <div class="hero-eye" id="heroEye">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" id="heroEyeIcon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </div>
   </div>
 
   <div class="stat-row">
@@ -890,16 +939,21 @@ input,select,button{font-family:inherit}
       <!-- Quick entry panel -->
       <div id="panel-quick" class="mode-panel active">
         <div class="qe-wrap">
-          <input class="qe-input" id="quickInput" placeholder="e.g.  150  or  200 30t  or  150 20t 18%" autocomplete="off" oninput="previewParse()" onkeydown="if(event.key==='Enter')submitQuick()">
-          <button class="qe-btn" onclick="submitQuick()" aria-label="Add trip">
+          <input class="qe-input" id="quickInput" placeholder="e.g.  150  or  200 30t  or  tap mic to speak" autocomplete="off" oninput="previewParse()" onkeydown="if(event.key==='Enter')submitQuick()" style="padding-right:90px">
+          <button type="button" class="qe-voice-btn" id="voiceBtn" onclick="toggleVoice()" aria-label="Voice input" title="Speak your trip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <button type="button" class="qe-btn" onclick="submitQuick()" aria-label="Add trip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
+        <div class="voice-status" id="voiceStatus"></div>
         <div class="parse-ok" id="parsePreview" role="status"></div>
         <div class="parse-err" id="parseError" role="alert"></div>
         <div class="qe-hints">
-          <div class="qe-hint-title">Format Guide</div>
+          <div class="qe-hint-title">Format Guide · or just speak it</div>
           <div class="qe-hint-row"><code>150</code><span>₱150 fare, default 20% comm</span></div>
+          <div class="qe-hint-row"><code>147 150</code><span>fare ₱147, customer gave ₱150 → tip ₱3</span></div>
           <div class="qe-hint-row"><code>150 20t</code><span>+ ₱20 tip &nbsp;<span style="opacity:0.5">or</span>&nbsp; 20tip</span></div>
           <div class="qe-hint-row"><code>150 50b</code><span>+ ₱50 bonus &nbsp;<span style="opacity:0.5">or</span>&nbsp; 50bonus</span></div>
           <div class="qe-hint-row"><code>200 15%</code><span>custom commission rate</span></div>
@@ -1770,6 +1824,132 @@ function grabPreview(){
 
 
 // ════════════════════════════════════════
+// VOICE INPUT
+// ════════════════════════════════════════
+let voiceRecognition=null;
+let voiceListening=false;
+
+// Word-to-number map for spoken numbers
+const WORD_NUMS={
+  'zero':0,'one':1,'two':2,'three':3,'four':4,'five':5,
+  'six':6,'seven':7,'eight':8,'nine':9,'ten':10,
+  'eleven':11,'twelve':12,'thirteen':13,'fourteen':14,'fifteen':15,
+  'sixteen':16,'seventeen':17,'eighteen':18,'nineteen':19,'twenty':20,
+  'thirty':30,'forty':40,'fifty':50,'sixty':60,'seventy':70,
+  'eighty':80,'ninety':90,'hundred':100,'thousand':1000
+};
+
+function wordsToNumbers(text){
+  // First pass: replace written numbers with digits
+  // e.g. "one hundred fifty" -> "150", "twenty tip" -> "20tip"
+  let s=text.toLowerCase().trim();
+
+  // Handle "hundred" combos: "one hundred fifty" → 150
+  s=s.replace(/(\w+)\s+hundred(?:\s+and)?\s+(\w+)/g,(m,a,b)=>{
+    const av=WORD_NUMS[a],bv=WORD_NUMS[b];
+    if(av!==undefined&&bv!==undefined)return String(av*100+bv);
+    return m;
+  });
+  s=s.replace(/(\w+)\s+hundred/g,(m,a)=>{
+    const av=WORD_NUMS[a];
+    return av!==undefined?String(av*100):m;
+  });
+
+  // Handle "twenty five" → 25 type combos
+  s=s.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s+(one|two|three|four|five|six|seven|eight|nine)\b/g,(m,tens,ones)=>{
+    return String(WORD_NUMS[tens]+WORD_NUMS[ones]);
+  });
+
+  // Replace remaining single word-numbers
+  s=s.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,m=>{
+    return WORD_NUMS[m]!==undefined?String(WORD_NUMS[m]):m;
+  });
+
+  // Normalize spoken keywords to app format
+  s=s.replace(/\btip\b/g,'t');
+  s=s.replace(/\bbonus\b/g,'b');
+  s=s.replace(/\bpercent\b/g,'%');
+  s=s.replace(/\bcommission\b/g,'%');
+
+  // Clean extra spaces
+  s=s.replace(/\s+/g,' ').trim();
+  return s;
+}
+
+function toggleVoice(){
+  if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
+    showToastSimple('Voice not supported on this browser. Try Chrome or Kiwi.');
+    return;
+  }
+  if(voiceListening){stopVoice();return;}
+  startVoice();
+}
+
+function startVoice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  voiceRecognition=new SR();
+  voiceRecognition.lang='en-PH';
+  voiceRecognition.continuous=false;
+  voiceRecognition.interimResults=true;
+  voiceRecognition.maxAlternatives=1;
+
+  voiceListening=true;
+  const btn=document.getElementById('voiceBtn');
+  const status=document.getElementById('voiceStatus');
+  btn.classList.add('listening');
+  status.className='voice-status active';
+  status.textContent='Listening... speak your trip';
+
+  voiceRecognition.onresult=e=>{
+    const transcript=e.results[0][0].transcript;
+    const isFinal=e.results[0].isFinal;
+    const converted=wordsToNumbers(transcript);
+    document.getElementById('quickInput').value=converted;
+    previewParse();
+    if(isFinal){
+      status.className='voice-status heard';
+      status.textContent='Heard: "'+transcript+'" → '+converted;
+    }
+  };
+
+  voiceRecognition.onend=()=>{
+    voiceListening=false;
+    btn.classList.remove('listening');
+    // Auto-submit if something valid was parsed
+    const raw=document.getElementById('quickInput').value;
+    const r=parseQuick(raw);
+    if(r&&!r.error){
+      setTimeout(()=>{
+        submitQuick();
+        const status=document.getElementById('voiceStatus');
+        status.className='voice-status heard';
+        status.textContent='Trip added!';
+        setTimeout(()=>{status.className='voice-status';},2000);
+      },400);
+    } else {
+      const status=document.getElementById('voiceStatus');
+      if(!raw){status.className='voice-status';status.textContent='';}
+    }
+  };
+
+  voiceRecognition.onerror=e=>{
+    voiceListening=false;
+    btn.classList.remove('listening');
+    status.className='voice-status';
+    if(e.error==='no-speech')status.textContent='';
+    else showToastSimple('Voice error: '+e.error);
+  };
+
+  voiceRecognition.start();
+}
+
+function stopVoice(){
+  if(voiceRecognition)voiceRecognition.stop();
+  voiceListening=false;
+  document.getElementById('voiceBtn').classList.remove('listening');
+}
+
+// ════════════════════════════════════════
 // QUICK ENTRY PARSER
 // ════════════════════════════════════════
 function parseQuick(raw){
@@ -1788,7 +1968,25 @@ function parseQuick(raw){
     .replace(/\d+(?:\.\d+)?\s*bon(?:us)?\b/g,'')
     .replace(/\d+(?:\.\d+)?\s*b\b/g,'')
     .trim();
-  const fM=stripped.match(/(\d+(?:\.\d+)?)/);if(fM)fare=parseFloat(fM[1]);
+
+  // Check for two bare numbers: "147 150" → fare=147, customer gave 150, tip=3
+  // Only applies when no tip/bonus keyword was already detected
+  const bareNums=stripped.match(/(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)/);
+  if(bareNums&&tip===0&&bonus===0){
+    const n1=parseFloat(bareNums[1]);
+    const n2=parseFloat(bareNums[2]);
+    // Interpret as fare + customer amount — tip is the difference
+    if(n2>n1){
+      fare=n1;
+      tip=Math.round((n2-n1)*100)/100;
+    } else {
+      // Second number is smaller or equal — just use first as fare
+      fare=n1;
+    }
+  } else {
+    const fM=stripped.match(/(\d+(?:\.\d+)?)/);if(fM)fare=parseFloat(fM[1]);
+  }
+
   if(!fare||fare<=0)return{error:'No fare found — start with the amount, e.g. 150 20t'};
   const commAmt=fare*(comm/100);
   return{fare,tip,commRate:comm,commAmt,bonus,net:fare-commAmt+tip+bonus};
@@ -1836,7 +2034,7 @@ function addTripForm(){
 // ════════════════════════════════════════
 function renderTrips(){
   const list=document.getElementById('tripList');
-  const trips=todayData.trips||[];
+  const trips=[...todayData.trips].reverse();
   const hintWrap=document.getElementById('swipeHintWrap');
   if(trips.length>0&&!swipeHintShown){
     hintWrap.innerHTML=`<div class="swipe-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="15 18 9 12 15 6"/></svg>Swipe left to delete · Tap to edit</div>`;
@@ -1849,13 +2047,15 @@ function renderTrips(){
     return;
   }
 
+  const total=trips.length;
   list.innerHTML=trips.map((t,i)=>{
+    const tripNum=total-i;
     if(editingTripId===t.id){
       return `
       <div class="edit-card" id="edit-${t.id}">
         <div class="edit-label">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Editing Trip ${i+1}
+          Editing Trip ${tripNum}
         </div>
         <div class="edit-grid">
           <div class="field"><label>Fare (₱)</label><input type="number" id="ef-fare-${t.id}" value="${t.fare}" inputmode="decimal"></div>
@@ -1866,7 +2066,7 @@ function renderTrips(){
         <div class="btn-row" style="margin-top:0">
           <button class="btn-sm ok" onclick="saveEdit(${t.id})" style="flex:1">Save</button>
           <button class="btn-sm" onclick="cancelEdit()" style="flex:1">Cancel</button>
-          <button class="btn-sm bad" onclick="confirmDeleteTrip(${t.id},${i})">Delete</button>
+          <button class="btn-sm bad" onclick="confirmDeleteTrip(${t.id},${tripNum-1})">Delete</button>
         </div>
       </div>`;
     }
@@ -1876,8 +2076,8 @@ function renderTrips(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
         Delete
       </div>
-      <div class="trip-card" id="trip-${t.id}" onclick="startEdit(${t.id})" role="button" aria-label="Trip ${i+1}, ${fmt(t.net)} net. Tap to edit.">
-        <div class="trip-idx">${i+1}</div>
+      <div class="trip-card" id="trip-${t.id}" onclick="startEdit(${t.id})" role="button" aria-label="Trip ${tripNum}, ${fmt(t.net)} net. Tap to edit.">
+        <div class="trip-idx">${tripNum}</div>
         <div class="trip-body">
           <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">${fmt(t.fare)} fare</div>
           <div class="trip-meta">tip ${fmt(t.tip)} · ${t._source==='grab'?'svc fee −'+fmt(t.commAmt):t._source==='grab-list'?'earnings list import'+(t._dest?' · '+t._dest.substring(0,20):''):t.commRate+'% comm'}${t.bonus>0?' · bonus '+fmt(t.bonus):''}</div>
@@ -2040,6 +2240,22 @@ function recalc(){
   saveTodayData(todayData);
   const c=calcDay(todayData);
   document.getElementById('takeHome').textContent=fmtNum(c.takeHome);
+  // Restore masking after recalc updates values
+  if(heroMasked)applyHeroMask();
+  // Tips badge
+  const badge=document.getElementById('tipsBadge');
+  const tipsAmt=document.getElementById('tipsAmount');
+  if(c.totalTips>0){
+    tipsAmt.textContent=fmt(c.totalTips);
+    badge.style.display='flex';
+    // Re-trigger animation
+    badge.style.animation='none';
+    badge.offsetHeight;
+    badge.style.animation='tipPop 0.4s cubic-bezier(0.34,1.5,0.64,1)';
+  } else {
+    badge.style.display='none';
+  }
+
   document.getElementById('summarySubtitle').textContent=c.tripCount?`${c.tripCount} trip${c.tripCount!==1?'s':''} · ${fmt(c.totalComm)} comm · ${fmt(c.totalExp)} expenses`:'No trips logged yet';
   document.getElementById('grossEarn').textContent=fmtShort(c.totalFares+c.totalTips+c.totalBonus);
   document.getElementById('totalDeduct').textContent=fmtShort(c.totalComm+c.totalExp);
@@ -2497,6 +2713,40 @@ function applyTheme(mode){
 function toggleTheme(){applyTheme(document.documentElement.classList.contains('light')?'dark':'light');}
 
 // ════════════════════════════════════════
+// HERO MASK TOGGLE
+// ════════════════════════════════════════
+let heroMasked=false;
+const EYE_OPEN='<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+const EYE_SHUT='<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
+
+function toggleHeroMask(){
+  heroMasked=!heroMasked;
+  applyHeroMask();
+  localStorage.setItem('mi_hero_masked',heroMasked?'1':'0');
+}
+function applyHeroMask(){
+  const icon=document.getElementById('heroEyeIcon');
+  if(icon)icon.innerHTML=heroMasked?EYE_SHUT:EYE_OPEN;
+  const masks={
+    'takeHome':   heroMasked?'••••••':null,
+    'tipsAmount': heroMasked?'•••••':null,
+    'summarySubtitle': heroMasked?'•••  ••••  ••••':null,
+    'grossEarn':  heroMasked?'••••':null,
+    'totalDeduct':heroMasked?'••••':null,
+  };
+  Object.entries(masks).forEach(([id,masked])=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    if(heroMasked){
+      if(!el.dataset.real)el.dataset.real=el.textContent;
+      el.textContent=masked;
+    } else {
+      if(el.dataset.real){el.textContent=el.dataset.real;delete el.dataset.real;}
+    }
+  });
+}
+
+// ════════════════════════════════════════
 // DATE NAVIGATION
 // ════════════════════════════════════════
 function fmtDateChip(k){
@@ -2601,6 +2851,7 @@ document.getElementById('datepickerOverlay').addEventListener('click',e=>{
 // INIT
 // ════════════════════════════════════════
 function initToday(){
+  heroMasked=localStorage.getItem('mi_hero_masked')==='1';
   applyTheme(localStorage.getItem('mi_theme')||'dark');
   // Clean up any empty day records left over from previous sessions
   const db=loadDB();
