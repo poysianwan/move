@@ -1896,7 +1896,8 @@ function holdVoiceEnd(){
   const label=document.getElementById('floatMicLabel');
   btn.classList.remove('holding');
   if(label)label.textContent='Hold';
-  setTimeout(()=>{if(voiceRecognition)voiceRecognition.stop();},500);
+  // Stop immediately on release — silence timer already handled auto-processing
+  setTimeout(()=>{if(voiceRecognition&&voiceListening)voiceRecognition.stop();},100);
 }
 let _micInfoTimer=null;
 
@@ -1911,6 +1912,19 @@ function startHoldVoice(){
 
   let finalTranscript='';
   let interimTranscript='';
+  let silenceTimer=null;
+  let alreadyStopped=false;
+
+  function resetSilenceTimer(){
+    clearTimeout(silenceTimer);
+    silenceTimer=setTimeout(()=>{
+      if(voiceListening&&!alreadyStopped){
+        alreadyStopped=true;
+        showFabStatus('⏳ Processing...');
+        voiceRecognition.stop();
+      }
+    },3000);
+  }
 
   voiceRecognition.onresult=e=>{
     finalTranscript='';
@@ -1922,12 +1936,14 @@ function startHoldVoice(){
         interimTranscript+=e.results[i][0].transcript;
       }
     }
-    // Show live feedback using whichever we have
     const display=(finalTranscript+interimTranscript).trim();
     showFabStatus('🎤 "'+display+'"');
+    // Reset the 3s silence cooldown every time speech comes in
+    resetSilenceTimer();
   };
 
   voiceRecognition.onend=()=>{
+    clearTimeout(silenceTimer);
     voiceListening=false;
     document.getElementById('floatMic').classList.remove('holding');
     const label=document.getElementById('floatMicLabel');
@@ -1966,6 +1982,7 @@ function startHoldVoice(){
   };
 
   voiceRecognition.onerror=e=>{
+    clearTimeout(silenceTimer);
     voiceListening=false;
     document.getElementById('floatMic').classList.remove('holding');
     const label=document.getElementById('floatMicLabel');
@@ -1975,6 +1992,8 @@ function startHoldVoice(){
   };
 
   voiceRecognition.start();
+  // Start silence timer immediately in case user holds but says nothing
+  resetSilenceTimer();
 }
 
 function showFabStatus(msg){
