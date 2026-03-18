@@ -1885,18 +1885,18 @@ function holdVoiceEnd(){
   clearTimeout(_micHoldTimer);
   // If released before threshold, it was a tap — show info tooltip
   if(held<MIC_HOLD_THRESHOLD){
-    showFabStatus('🎤 Press & hold to record — say your fare, e.g. "150 tip 20"');
+    showFabStatus('🎤 Press & hold to record — say your fare, e.g. "150 20 tip"');
     clearTimeout(_micInfoTimer);
     _micInfoTimer=setTimeout(hideFabStatus,3000);
     return;
   }
   if(!voiceListening)return;
-  // Normal hold-release — stop recognition, onend will process result
-  if(voiceRecognition)voiceRecognition.stop();
+  // Give the engine ~300ms to finalize the last result before stopping
   const btn=document.getElementById('floatMic');
   const label=document.getElementById('floatMicLabel');
   btn.classList.remove('holding');
   if(label)label.textContent='Hold';
+  setTimeout(()=>{if(voiceRecognition)voiceRecognition.stop();},300);
 }
 let _micInfoTimer=null;
 
@@ -1906,53 +1906,69 @@ function startHoldVoice(){
   voiceRecognition.lang='en-PH';
   voiceRecognition.continuous=true;
   voiceRecognition.interimResults=true;
-  voiceRecognition.maxAlternatives=1;
+  voiceRecognition.maxAlternatives=3;
   voiceListening=true;
 
-  let lastTranscript='';
+  let finalTranscript='';
+  let interimTranscript='';
 
   voiceRecognition.onresult=e=>{
-    const transcript=Array.from(e.results).map(r=>r[0].transcript).join(' ');
-    lastTranscript=transcript;
-    // Show live feedback only — don't touch quickInput
-    showFabStatus('🎤 "'+transcript+'"');
+    finalTranscript='';
+    interimTranscript='';
+    for(let i=0;i<e.results.length;i++){
+      if(e.results[i].isFinal){
+        finalTranscript+=e.results[i][0].transcript+' ';
+      } else {
+        interimTranscript+=e.results[i][0].transcript;
+      }
+    }
+    // Show live feedback
+    showFabStatus('🎤 "'+(finalTranscript+interimTranscript).trim()+'"');
   };
 
   voiceRecognition.onend=()=>{
     voiceListening=false;
     document.getElementById('floatMic').classList.remove('holding');
-    document.getElementById('floatMicLabel').textContent='Hold';
+    const label=document.getElementById('floatMicLabel');
+    if(label)label.textContent='Hold';
 
-    if(!lastTranscript){hideFabStatus();return;}
+    // Use final transcript if available, fall back to interim
+    const raw=(finalTranscript||interimTranscript).trim();
+    if(!raw){
+      showFabStatus('Nothing heard — try again');
+      setTimeout(hideFabStatus,2000);
+      return;
+    }
 
-    const converted=wordsToNumbers(lastTranscript);
+    const converted=cleanVoiceInput(raw);
     const r=parseQuick(converted);
 
     if(r&&!r.error){
       hideFabStatus();
-      const trip={...r,id:Date.now()};
-      showTripToast(trip);
+      showTripToast({...r,id:Date.now()});
     } else {
-      // Best-effort: grab any number
-      const anyNum=converted.match(/\d+(?:\.\d+)?/);
+      // Best-effort: grab the first valid number as fare
+      const anyNum=converted.match(/\b(\d{2,4}(?:\.\d+)?)\b/);
       if(anyNum){
-        const fare=parseFloat(anyNum[0]);
-        const commRate=DEFAULT_COMM;
-        const commAmt=fare*(commRate/100);
-        const trip={fare,tip:0,commRate,commAmt,net:fare-commAmt,id:Date.now()};
-        hideFabStatus();
-        showTripToast(trip);
-      } else {
-        showFabStatus('Nothing recognised — try again');
-        setTimeout(hideFabStatus,2000);
+        const fare=parseFloat(anyNum[1]);
+        if(fare>0){
+          const commRate=DEFAULT_COMM;
+          const commAmt=fare*(commRate/100);
+          hideFabStatus();
+          showTripToast({fare,tip:0,commRate,commAmt,net:fare-commAmt,id:Date.now()});
+          return;
+        }
       }
+      showFabStatus('Couldn\'t read that — try again');
+      setTimeout(hideFabStatus,2500);
     }
   };
 
   voiceRecognition.onerror=e=>{
     voiceListening=false;
     document.getElementById('floatMic').classList.remove('holding');
-    document.getElementById('floatMicLabel').textContent='Hold';
+    const label=document.getElementById('floatMicLabel');
+    if(label)label.textContent='Hold';
     if(e.error!=='no-speech')showFabStatus('Error: '+e.error);
     setTimeout(hideFabStatus,2000);
   };
@@ -1980,18 +1996,27 @@ const WORD_NUMS={
   'eighty':80,'ninety':90,'hundred':100,'thousand':1000
 };
 
-function wordsToNumbers(text){
-  // First pass: replace written numbers with digits
-  // e.g. "one hundred fifty" -> "150", "twenty tip" -> "20tip"
+function cleanVoiceInput(text){
   let s=text.toLowerCase().trim();
 
+  // Normalize hyphens: "one-fifty" → "one fifty", "one-seventy" → "one seventy"
+  s=s.replace(/-/g,' ');
+
+  // Split any run-together digits: "150170" → "150 170"
+  s=s.replace(/(\d{3,})(\d{3})/g,'$1 $2');
+  // More aggressive: split long digit strings at natural breakpoints
+  s=s.replace(/\b(\d{6,})\b/g,m=>{
+    // Try splitting into groups of 3
+    return m.replace(/(\d{3})(?=\d)/g,'$1 ');
+  });
+
   // Handle "hundred" combos: "one hundred fifty" → 150
-  s=s.replace(/(\w+)\s+hundred(?:\s+and)?\s+(\w+)/g,(m,a,b)=>{
+  s=s.replace(/\b(\w+)\s+hundred(?:\s+and)?\s+(\w+)\b/g,(m,a,b)=>{
     const av=WORD_NUMS[a],bv=WORD_NUMS[b];
     if(av!==undefined&&bv!==undefined)return String(av*100+bv);
     return m;
   });
-  s=s.replace(/(\w+)\s+hundred/g,(m,a)=>{
+  s=s.replace(/\b(\w+)\s+hundred\b/g,(m,a)=>{
     const av=WORD_NUMS[a];
     return av!==undefined?String(av*100):m;
   });
@@ -2001,20 +2026,25 @@ function wordsToNumbers(text){
     return String(WORD_NUMS[tens]+WORD_NUMS[ones]);
   });
 
-  // Replace remaining single word-numbers
+  // Replace single word-numbers
   s=s.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,m=>{
     return WORD_NUMS[m]!==undefined?String(WORD_NUMS[m]):m;
   });
 
-  // Normalize spoken keywords to app format
-  s=s.replace(/\btip\b/g,'t');
-  s=s.replace(/\bpercent\b/g,'%');
-  s=s.replace(/\bcommission\b/g,'%');
+  // Keep only digits, keywords (tip, commission, percent), dots, spaces
+  // Strip everything else (filler words, random speech)
+  s=s.replace(/\b(?!tip\b|commission\b|percent\b|\d)(\w+)\b/g,'');
 
-  // Clean extra spaces
+  // Normalize keywords
+  s=s.replace(/\bpercent\b/g,'%');
+
+  // Clean up extra spaces
   s=s.replace(/\s+/g,' ').trim();
   return s;
 }
+
+// Keep wordsToNumbers as alias for any legacy calls
+function wordsToNumbers(text){return cleanVoiceInput(text);}
 
 // ════════════════════════════════════════
 // QUICK ENTRY PARSER
