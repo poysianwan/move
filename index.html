@@ -1910,6 +1910,7 @@ function startHoldVoice(){
   voiceRecognition.maxAlternatives=3;
   voiceListening=true;
 
+  let collectedFinals=[];  // accumulate unique final phrases
   let finalTranscript='';
   let interimTranscript='';
   let silenceTimer=null;
@@ -1927,18 +1928,22 @@ function startHoldVoice(){
   }
 
   voiceRecognition.onresult=e=>{
-    finalTranscript='';
     interimTranscript='';
-    for(let i=0;i<e.results.length;i++){
+    // Only process new results starting from resultIndex
+    for(let i=e.resultIndex;i<e.results.length;i++){
       if(e.results[i].isFinal){
-        finalTranscript+=e.results[i][0].transcript+' ';
+        const phrase=e.results[i][0].transcript.trim();
+        // Deduplicate: don't add if it's the same as the last collected phrase
+        if(phrase&&phrase!==collectedFinals[collectedFinals.length-1]){
+          collectedFinals.push(phrase);
+        }
       } else {
         interimTranscript+=e.results[i][0].transcript;
       }
     }
-    const display=(finalTranscript+interimTranscript).trim();
+    finalTranscript=collectedFinals.join(' ');
+    const display=(finalTranscript+(interimTranscript?' '+interimTranscript:'')).trim();
     showFabStatus('🎤 "'+display+'"');
-    // Reset the 3s silence cooldown every time speech comes in
     resetSilenceTimer();
   };
 
