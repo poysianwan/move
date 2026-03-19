@@ -1943,16 +1943,20 @@ function _startRecognitionSession(){
     fullFinal=fullFinal.trim();
     _allFinals=fullFinal?[fullFinal]:[];
     _lastInterim=latestInterim;
-    showFabStatus('🎤 "'+(fullFinal+(latestInterim?' '+latestInterim:'')).trim()+'"');
+    // Show the cleaned, deduped version so user sees exactly what will be logged
+    const raw=(fullFinal+(latestInterim?' '+latestInterim:'')).trim();
+    const preview=cleanVoiceInput(_dedupeNumbers(raw));
+    showFabStatus('🎤 '+(preview||raw));
   };
 
   voiceRecognition.onend=()=>{
     voiceListening=false;
     if(_buttonHeld){
-      // Engine stopped mid-hold due to silence — do NOT restart, just wait
-      // Keep what we have and show it; button release will process
       const soFar=(_allFinals[0]||_lastInterim||'').trim();
-      if(soFar)showFabStatus('🎤 "'+soFar+'" — release to confirm');
+      if(soFar){
+        const preview=cleanVoiceInput(_dedupeNumbers(soFar));
+        showFabStatus('🎤 '+(preview||soFar)+' — release to confirm');
+      }
     } else {
       document.getElementById('floatMic').classList.remove('holding');
       const label=document.getElementById('floatMicLabel');
@@ -1978,6 +1982,36 @@ function _startRecognitionSession(){
   try{voiceRecognition.start();}catch(err){}
 }
 
+function _dedupeNumbers(text){
+  // Remove consecutive duplicate numbers unless a keyword (tip/commission) sits between them
+  // e.g. "147 147 150" → "147 150", but "50 50 tip" → "50 50 tip" (valid: fare 50, customer gave 50+tip)
+  // Strategy: split into tokens, walk through, skip a number if it's identical to the previous number
+  // AND no keyword appeared between them
+  const tokens=text.trim().split(/\s+/);
+  const result=[];
+  let lastNum=null;
+  let keywordSinceLastNum=false;
+  for(const tok of tokens){
+    const isKeyword=/^(tip|commission|percent|%)$/i.test(tok);
+    const isNum=/^\d+(\.\d+)?$/.test(tok);
+    if(isKeyword){
+      keywordSinceLastNum=true;
+      result.push(tok);
+    } else if(isNum){
+      if(tok===lastNum&&!keywordSinceLastNum){
+        // Duplicate number with no keyword between — skip it
+      } else {
+        result.push(tok);
+        lastNum=tok;
+        keywordSinceLastNum=false;
+      }
+    } else {
+      result.push(tok);
+    }
+  }
+  return result.join(' ');
+}
+
 function _processVoiceResult(){
   const raw=(_allFinals.join(' ')||_lastInterim).trim();
   if(!raw){
@@ -1985,7 +2019,8 @@ function _processVoiceResult(){
     setTimeout(hideFabStatus,2000);
     return;
   }
-  const converted=cleanVoiceInput(raw);
+  const deduped=_dedupeNumbers(raw);
+  const converted=cleanVoiceInput(deduped);
   const r=parseQuick(converted);
   if(r&&!r.error){
     hideFabStatus();
