@@ -763,20 +763,24 @@ function updateAIStatusPill(){
   const hasKey=!!localStorage.getItem('mi_gemini_key');
   const pill=document.getElementById('aiStatusPill');
   const btn=document.getElementById('aiSetupBtn');
+  const fab=document.getElementById('floatMic');
   if(!pill)return;
   if(hasKey){
     pill.className='ai-status-pill active';
     pill.innerHTML='<span class="ai-status-dot"></span>Gemini AI active';
     if(btn)btn.style.display='none';
-    // Update key button icon to green check
     const keyBtn=document.getElementById('geminiKeyBtn');
     if(keyBtn)keyBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="var(--pos)" stroke-width="1.75"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>';
+    // Restore FAB — fully active
+    if(fab){fab.style.opacity='';fab.style.filter='';fab.title='Hold to record trip';}
   }else{
     pill.className='ai-status-pill inactive';
-    pill.innerHTML='<span class="ai-status-dot"></span>AI cleanup off';
-    if(btn)btn.style.display='';
+    pill.innerHTML='<span class="ai-status-dot"></span>AI key required';
+    if(btn){btn.style.display='';btn.textContent='Set up →';}
     const keyBtn=document.getElementById('geminiKeyBtn');
     if(keyBtn)keyBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>';
+    // Dim FAB to signal it's locked
+    if(fab){fab.style.opacity='0.4';fab.style.filter='grayscale(0.5)';fab.title='Set up Gemini AI key to use voice input';}
   }
 }
 
@@ -843,55 +847,162 @@ function clearGeminiKey(){
 async function geminiSanitize(rawText){
   const key=localStorage.getItem('mi_gemini_key');
   if(!key)return null;
+
   const prompt=`You are a voice input sanitizer for a ride-hailing earnings tracker app in the Philippines (MoveIt).
 
-OUTPUT RULES — follow exactly:
-1. Output ONLY the cleaned token string. No explanation, no punctuation, no quotes, no extra text.
-2. Valid output tokens: numbers (integers or decimals) and ONLY these keywords: tip, commission
-3. Remove ALL other words: filler words, names, directions, greetings, units, currency symbols (₱), percent signs (%), commas.
-4. FIX run-together numbers using these constraints:
-   - A single fare is at most 3 digits (max ₱999). Tips are also max 3 digits.
-   - If you see a 4-digit number, split into two valid parts (left=fare 30-999, right=tip or second fare 5-999).
-   - If you see a 5-digit number, split as 3+2 digits.
-   - If you see a 6-digit number, split as 3+3 digits.
-   - Examples: 3050→30 50 | 15020→150 20 | 14720→147 20 | 15018→150 18 | 147150→147 150 | 150200→150 200
-   - If a number is already ≤999 and plausible as a single fare or tip, leave it alone.
-5. If input contains zero numbers, output exactly: UNCLEAR
-6. Never invent numbers. Never output negative numbers.
-7. Keep associated keyword after its number: write "20 tip" not "tip 20".
+STRICT OUTPUT RULES — violating any rule makes the output useless:
+1. Output ONLY the cleaned token string. NOTHING else — no labels, no "Output:", no explanation, no punctuation, no quotes.
+2. Valid output tokens are ONLY: integers (no decimals, no commas) and the keywords: tip, commission
+3. Every number in your output MUST come from the input. NEVER invent or add numbers.
+4. Remove ALL non-number, non-keyword content: filler words, names, places, greetings, directions, currency symbols (₱), percent signs (%), commas, periods.
+5. FIX run-together numbers (speech recognition merges separate numbers):
+   - Max valid fare or tip = 3 digits (₱10–₱999). Never output a number > 999.
+   - 4-digit: split as 2+2 or 3+1. Left part = fare (30–999), right = tip (5–999).
+   - 5-digit: split as 3+2. 6-digit: split as 3+3.
+   - Examples: 3050→30 50 | 15020→150 20 | 14720→147 20 | 147150→147 150
+   - Numbers already ≤999: leave alone.
+6. REMOVE DUPLICATE SEQUENCES — speech recognition often echoes the whole phrase twice:
+   - "150 70 150 70" → 150 70
+   - "150 150" → 150
+   - "150 20 tip 150 20 tip" → 150 20 tip
+   - Two DIFFERENT numbers like "147 150" are NOT a duplicate — keep both.
+7. Keyword placement: keyword always comes AFTER its number. Write "20 tip" not "tip 20".
+8. Max output length: at most 5 tokens (e.g. "150 20 tip 18 commission"). If you have more, you are hallucinating — trim to the first valid fare + optional tip + optional commission.
+9. Commission must be a realistic rate: 1–50. If a number labeled commission is outside this range, drop it and use the default (do NOT output it).
+10. If the input contains zero recognizable numbers, output exactly the single word: UNCLEAR
 
-EXAMPLES:
-Input: "one fifty" → Output: 150
-Input: "150 20 tip" → Output: 150 20 tip
-Input: "3050" → Output: 30 50
-Input: "30 50 fast" → Output: 30 50
-Input: "15020tip" → Output: 150 20 tip
-Input: "147 150" → Output: 147 150
-Input: "uhhh one forty seven customer gave one fifty" → Output: 147 150
-Input: "₱150 18% commission" → Output: 150 18 commission
-Input: "hello good morning" → Output: UNCLEAR
-Input: "150 20 tip 18 commission" → Output: 150 20 tip 18 commission
-Input: "please add 30 50 fast delivery" → Output: 30 50
+EXAMPLES (input → correct output):
+"one fifty" → 150
+"150 20 tip" → 150 20 tip
+"3050" → 30 50
+"30 50 fast delivery" → 30 50
+"15020tip" → 150 20 tip
+"147 150" → 147 150
+"150 70 150 70" → 150 70
+"150 150" → 150
+"one forty seven one fifty" → 147 150
+"uhh ₱150 18% commission" → 150 18 commission
+"150 20 tip 18 commission" → 150 20 tip 18 commission
+"hello po good morning" → UNCLEAR
+"Output: 150" → 150
+"150 20 tip 150 20 tip" → 150 20 tip
+"one fifty seventy" → 150 70
 
 Raw transcript: "${rawText}"
-Output:`;
+`;
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        contents:[{parts:[{text:prompt}]}],
-        generationConfig:{temperature:0.1,maxOutputTokens:64}
-      })
-    });
+    // Gap 15: 8-second timeout so a bad connection doesn't hang the UI
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),8000);
+    const res=await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+      {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          contents:[{parts:[{text:prompt}]}],
+          generationConfig:{temperature:0.0,maxOutputTokens:32,stopSequences:['\n']}
+        }),
+        signal:controller.signal
+      }
+    );
+    clearTimeout(timeout);
     if(!res.ok)throw new Error('HTTP '+res.status);
     const data=await res.json();
-    const out=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').trim();
-    if(!out||out.toUpperCase()==='UNCLEAR')return'UNCLEAR';
-    // Strip any accidental quotes/punctuation Gemini might add
-    return out.replace(/["'`,.\-]/g,'').replace(/\s+/g,' ').trim();
+    let out=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').trim();
+
+    // ── OUTPUT SANITIZATION (all 18 gaps) ───────────────────
+
+    // Gap 9: normalize newlines to spaces
+    out=out.replace(/[\r\n]+/g,' ');
+
+    // Gap 8: normalize whitespace
+    out=out.replace(/\s+/g,' ').trim();
+
+    // Gap 10: strip "Output:" / "Input:" prefix that Gemini sometimes mirrors
+    out=out.replace(/^(output|input)\s*:\s*/i,'');
+
+    // Gap 1: strip quotes, backticks, punctuation Gemini adds
+    out=out.replace(/["'`*_]/g,'');
+
+    // Gap 11: strip commas inside numbers (e.g. "1,500" → "1500")
+    out=out.replace(/(\d),(\d)/g,'$1$2');
+
+    // Gap 4: strip decimals — convert "150.00" → "150"
+    out=out.replace(/\b(\d+)\.\d+\b/g,'$1');
+
+    // Gap 5 / Gap 13: if output is ONLY a keyword with no number → UNCLEAR
+    if(/^(tip|commission)$/i.test(out.trim()))return'UNCLEAR';
+
+    // Gap 5: UNCLEAR check (case-insensitive, handle extra spaces)
+    if(!out||/^unclear$/i.test(out.trim()))return'UNCLEAR';
+
+    // Tokenize — only keep integers and the two allowed keywords
+    const tokens=out.split(' ').filter(t=>t.length>0);
+    const clean=tokens.filter(t=>/^\d+$/.test(t)||/^(tip|commission)$/i.test(t));
+
+    // Gap 12 / Gap 14: remove numbers that are 0, negative, or single-digit
+    // (single-digit can't be a fare — minimum realistic fare is ₱10)
+    const validTokens=[];
+    for(const t of clean){
+      if(/^(tip|commission)$/i.test(t)){validTokens.push(t.toLowerCase());continue;}
+      const n=parseInt(t,10);
+      if(n<10)continue; // too small to be a fare or tip
+      validTokens.push(String(n));
+    }
+
+    // Gap 3: clamp any number > 999 — split it or drop it
+    const clamped=[];
+    for(const t of validTokens){
+      if(/^(tip|commission)$/i.test(t)){clamped.push(t);continue;}
+      const n=parseInt(t,10);
+      if(n<=999){clamped.push(t);}
+      else{
+        // Try to split: e.g. 1500 → 150 0 (drop), 15020 → 150 20
+        const s=String(n);
+        const a=parseInt(s.slice(0,3),10),b=parseInt(s.slice(3)||'0',10);
+        if(a>=30&&a<=999)clamped.push(String(a));
+        if(b>=10&&b<=999)clamped.push(String(b));
+      }
+    }
+
+    // Gap 6: commission value must be 1–50 (a realistic commission rate %)
+    // Find any number tagged as commission and validate it
+    const commIdx=clamped.findIndex(t=>/^commission$/i.test(t));
+    if(commIdx>0){
+      const commVal=parseInt(clamped[commIdx-1],10);
+      if(commVal<1||commVal>50){
+        // Drop both the bad rate and the keyword
+        clamped.splice(commIdx-1,2);
+      }
+    }
+
+    // Gap 7: max 5 tokens — if more, something went wrong, trim
+    const trimmed=clamped.slice(0,5);
+
+    // Gap 16: keyword must not be the first token (no leading orphan keywords)
+    while(trimmed.length>0&&/^(tip|commission)$/i.test(trimmed[0]))trimmed.shift();
+
+    // Gap 17+18: deduplicate repeated keywords — keep only the first tip and first commission
+    const seen={tip:false,commission:false};
+    const deduped=[];
+    for(let i=0;i<trimmed.length;i++){
+      const t=trimmed[i];
+      if(/^tip$/i.test(t)){if(!seen.tip){seen.tip=true;deduped.push(t);}else{deduped.pop();}}// drop number before second tip too
+      else if(/^commission$/i.test(t)){if(!seen.commission){seen.commission=true;deduped.push(t);}else{deduped.pop();}}
+      else{deduped.push(t);}
+    }
+
+    const result=deduped.join(' ').trim();
+
+    // Final: if nothing survived sanitization → UNCLEAR
+    if(!result||!/\d/.test(result))return'UNCLEAR';
+
+    return result;
+
   }catch(err){
-    console.warn('Gemini fallback to local:',err.message);
+    if(err.name==='AbortError')console.warn('Gemini timeout — falling back to local');
+    else console.warn('Gemini fallback to local:',err.message);
     return null;
   }
 }
@@ -1103,6 +1214,15 @@ function holdVoiceStart(e){
   if(e&&e.type==='touchstart'){_isTouchDevice=true;e.preventDefault();}
   else if(e&&e.type==='mousedown'&&_isTouchDevice){return;}
   if(_buttonHeld)return;
+
+  // ── Gate: Gemini key required ─────────────────────────────
+  if(!localStorage.getItem('mi_gemini_key')){
+    showFabStatus('🔑 Gemini AI key required — tap to set up');
+    clearTimeout(_micInfoTimer);
+    _micInfoTimer=setTimeout(()=>{hideFabStatus();openGeminiKeyModal();},1200);
+    return;
+  }
+
   _micPressTime=Date.now();
   _micHoldTimer=setTimeout(()=>{
     if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){showFabStatus('Voice not supported. Try Chrome or Kiwi.');return;}
@@ -1119,6 +1239,8 @@ function holdVoiceEnd(e){
   const held=Date.now()-_micPressTime;
   clearTimeout(_micHoldTimer);
   if(held<MIC_HOLD_THRESHOLD){
+    // If no key and user did a short tap (not blocked by start) — show hint
+    if(!localStorage.getItem('mi_gemini_key'))return;
     if(!_buttonHeld){showFabStatus('🎤 Press & hold to record — say your fare, e.g. "150 20 tip"');clearTimeout(_micInfoTimer);_micInfoTimer=setTimeout(hideFabStatus,3000);}
     return;
   }
@@ -1192,6 +1314,10 @@ async function _processVoiceResult(){
 
   // Fix any run-together numbers the AI may have missed
   cleaned=_splitRunTogetherNums(cleaned);
+
+  // Deduplicate repeated sequences (e.g. "150 70 150 70" → "150 70")
+  // Catches cases where speech recognition echoes the input twice
+  cleaned=_dedupeSequence(cleaned);
 
   // Remove every word that is NOT a number OR an allowed keyword
   // Allowed keywords: tip, commission (and only those two)
@@ -1317,6 +1443,36 @@ function _dedupeNumbers(text){
     else{result.push(tok);}
   }
   return result.join(' ');
+}
+
+// Detect and remove repeated whole-sequence duplicates
+// e.g. "150 70 150 70" → "150 70", "150 20 tip 150 20 tip" → "150 20 tip"
+// Works by trying to split the token list into two identical halves
+function _dedupeSequence(text){
+  const tokens=text.trim().split(/\s+/);
+  const n=tokens.length;
+  // Try every possible half-length from n/2 down to 1
+  for(let half=Math.floor(n/2);half>=1;half--){
+    if(n%half!==0)continue; // must divide evenly
+    const repeats=n/half;
+    if(repeats<2)continue;
+    const segment=tokens.slice(0,half).join(' ');
+    // Check all segments are identical
+    let allSame=true;
+    for(let i=1;i<repeats;i++){
+      if(tokens.slice(i*half,(i+1)*half).join(' ')!==segment){allSame=false;break;}
+    }
+    if(allSame)return segment;
+  }
+  // Also handle near-duplicate: first half matches second half (odd token count)
+  // e.g. "150 70 150 70 150" — just take the shorter unique part
+  if(n>=4){
+    const half=Math.floor(n/2);
+    const first=tokens.slice(0,half).join(' ');
+    const second=tokens.slice(half,half*2).join(' ');
+    if(first===second)return first;
+  }
+  return text;
 }
 
 function setVal(id,val){
