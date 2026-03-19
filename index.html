@@ -1858,147 +1858,138 @@ function grabPreview(){
 let voiceRecognition=null;
 let voiceListening=false;
 let _micPressTime=0;
-const MIC_HOLD_THRESHOLD=250; // ms — shorter than this = tap, show info
+let _micHoldTimer=null;
+let _micInfoTimer=null;
+let _buttonHeld=false;          // true while finger is down
+let _allFinals=[];              // accumulates finals across restarts
+let _lastInterim='';            // latest interim for display
+
+const MIC_HOLD_THRESHOLD=250;
 
 function holdVoiceStart(e){
   if(e)e.preventDefault();
   _micPressTime=Date.now();
-  // Delay actual start slightly so a quick tap can abort it
   _micHoldTimer=setTimeout(()=>{
     if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
       showFabStatus('Voice not supported. Try Chrome or Kiwi.');
       return;
     }
-    if(voiceListening)return;
-    const btn=document.getElementById('floatMic');
+    if(_buttonHeld)return;
+    _buttonHeld=true;
+    _allFinals=[];
+    _lastInterim='';
+    document.getElementById('floatMic').classList.add('holding');
     const label=document.getElementById('floatMicLabel');
-    btn.classList.add('holding');
     if(label)label.textContent='Speak';
     showFabStatus('🎤 Listening...');
-    startHoldVoice();
+    _startRecognitionSession();
   },MIC_HOLD_THRESHOLD);
 }
-let _micHoldTimer=null;
 
 function holdVoiceEnd(){
   const held=Date.now()-_micPressTime;
   clearTimeout(_micHoldTimer);
-  // If released before threshold, it was a tap — show info tooltip
   if(held<MIC_HOLD_THRESHOLD){
     showFabStatus('🎤 Press & hold to record — say your fare, e.g. "150 20 tip"');
     clearTimeout(_micInfoTimer);
     _micInfoTimer=setTimeout(hideFabStatus,3000);
     return;
   }
-  if(!voiceListening)return;
-  // Give the engine ~300ms to finalize the last result before stopping
-  const btn=document.getElementById('floatMic');
+  if(!_buttonHeld)return;
+  _buttonHeld=false;
+  document.getElementById('floatMic').classList.remove('holding');
   const label=document.getElementById('floatMicLabel');
-  btn.classList.remove('holding');
   if(label)label.textContent='Hold';
-  // Stop immediately on release — silence timer already handled auto-processing
-  setTimeout(()=>{if(voiceRecognition&&voiceListening)voiceRecognition.stop();},100);
+  // Stop current session — onend will detect button is released and process
+  if(voiceRecognition){try{voiceRecognition.stop();}catch(err){}}
 }
-let _micInfoTimer=null;
 
-function startHoldVoice(){
+function _startRecognitionSession(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   voiceRecognition=new SR();
   voiceRecognition.lang='en-PH';
   voiceRecognition.continuous=true;
   voiceRecognition.interimResults=true;
-  voiceRecognition.maxAlternatives=3;
+  voiceRecognition.maxAlternatives=1;
   voiceListening=true;
 
-  let collectedFinals=[];  // accumulate unique final phrases
-  let finalTranscript='';
-  let interimTranscript='';
-  let silenceTimer=null;
-  let alreadyStopped=false;
-
-  function resetSilenceTimer(){
-    clearTimeout(silenceTimer);
-    silenceTimer=setTimeout(()=>{
-      if(voiceListening&&!alreadyStopped){
-        alreadyStopped=true;
-        showFabStatus('⏳ Processing...');
-        voiceRecognition.stop();
-      }
-    },3000);
-  }
-
   voiceRecognition.onresult=e=>{
-    interimTranscript='';
-    // Only process new results starting from resultIndex
+    _lastInterim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
       if(e.results[i].isFinal){
         const phrase=e.results[i][0].transcript.trim();
-        // Deduplicate: don't add if it's the same as the last collected phrase
-        if(phrase&&phrase!==collectedFinals[collectedFinals.length-1]){
-          collectedFinals.push(phrase);
+        // Deduplicate consecutive identical phrases
+        if(phrase&&phrase!==_allFinals[_allFinals.length-1]){
+          _allFinals.push(phrase);
         }
       } else {
-        interimTranscript+=e.results[i][0].transcript;
+        _lastInterim+=e.results[i][0].transcript;
       }
     }
-    finalTranscript=collectedFinals.join(' ');
-    const display=(finalTranscript+(interimTranscript?' '+interimTranscript:'')).trim();
-    showFabStatus('🎤 "'+display+'"');
-    resetSilenceTimer();
+    const full=(_allFinals.join(' ')+(_lastInterim?' '+_lastInterim:'')).trim();
+    showFabStatus('🎤 "'+full+'"');
   };
 
   voiceRecognition.onend=()=>{
-    clearTimeout(silenceTimer);
     voiceListening=false;
-    document.getElementById('floatMic').classList.remove('holding');
-    const label=document.getElementById('floatMicLabel');
-    if(label)label.textContent='Hold';
-
-    // Use final transcript if available, fall back to interim
-    const raw=(finalTranscript||interimTranscript).trim();
-    if(!raw){
-      showFabStatus('Nothing heard — try again');
-      setTimeout(hideFabStatus,2000);
-      return;
-    }
-
-    const converted=cleanVoiceInput(raw);
-    const r=parseQuick(converted);
-
-    if(r&&!r.error){
-      hideFabStatus();
-      showTripToast({...r,id:Date.now()});
+    if(_buttonHeld){
+      // Button still held — engine stopped due to silence, restart it
+      _startRecognitionSession();
     } else {
-      // Best-effort: grab the first valid number as fare
-      const anyNum=converted.match(/\b(\d{2,4}(?:\.\d+)?)\b/);
-      if(anyNum){
-        const fare=parseFloat(anyNum[1]);
-        if(fare>0){
-          const commRate=DEFAULT_COMM;
-          const commAmt=fare*(commRate/100);
-          hideFabStatus();
-          showTripToast({fare,tip:0,commRate,commAmt,net:fare-commAmt,id:Date.now()});
-          return;
-        }
-      }
-      showFabStatus('Couldn\'t read that — try again');
-      setTimeout(hideFabStatus,2500);
+      // Button released — process everything collected
+      document.getElementById('floatMic').classList.remove('holding');
+      const label=document.getElementById('floatMicLabel');
+      if(label)label.textContent='Hold';
+      _processVoiceResult();
     }
   };
 
   voiceRecognition.onerror=e=>{
-    clearTimeout(silenceTimer);
     voiceListening=false;
+    if(e.error==='no-speech'||e.error==='aborted'){
+      // Restart silently if still holding
+      if(_buttonHeld){_startRecognitionSession();return;}
+    }
+    _buttonHeld=false;
     document.getElementById('floatMic').classList.remove('holding');
     const label=document.getElementById('floatMicLabel');
     if(label)label.textContent='Hold';
-    if(e.error!=='no-speech')showFabStatus('Error: '+e.error);
+    showFabStatus('Error: '+e.error);
     setTimeout(hideFabStatus,2000);
   };
 
-  voiceRecognition.start();
-  // Start silence timer immediately in case user holds but says nothing
-  resetSilenceTimer();
+  try{voiceRecognition.start();}catch(err){
+    // Already started — ignore
+  }
+}
+
+function _processVoiceResult(){
+  const raw=(_allFinals.join(' ')||_lastInterim).trim();
+  if(!raw){
+    showFabStatus('Nothing heard — try again');
+    setTimeout(hideFabStatus,2000);
+    return;
+  }
+  const converted=cleanVoiceInput(raw);
+  const r=parseQuick(converted);
+  if(r&&!r.error){
+    hideFabStatus();
+    showTripToast({...r,id:Date.now()});
+    return;
+  }
+  // Best-effort: first valid 2–4 digit number as fare
+  const anyNum=converted.match(/\b(\d{2,4}(?:\.\d+)?)\b/);
+  if(anyNum){
+    const fare=parseFloat(anyNum[1]);
+    if(fare>0){
+      const commRate=DEFAULT_COMM,commAmt=fare*(commRate/100);
+      hideFabStatus();
+      showTripToast({fare,tip:0,commRate,commAmt,net:fare-commAmt,id:Date.now()});
+      return;
+    }
+  }
+  showFabStatus('Couldn\'t read that — try again');
+  setTimeout(hideFabStatus,2500);
 }
 
 function showFabStatus(msg){
