@@ -1894,7 +1894,6 @@ function holdVoiceStart(e){
 }
 
 function holdVoiceEnd(e){
-  // Block synthetic mouse end events on touch devices
   if(e&&e.type==='mouseup'&&_isTouchDevice)return;
   if(e&&e.type==='mouseleave'&&_isTouchDevice)return;
   const held=Date.now()-_micPressTime;
@@ -1912,7 +1911,13 @@ function holdVoiceEnd(e){
   document.getElementById('floatMic').classList.remove('holding');
   const label=document.getElementById('floatMicLabel');
   if(label)label.textContent='Hold';
-  if(voiceRecognition){try{voiceRecognition.stop();}catch(err){}}
+  if(voiceListening){
+    // Engine still running — stop it, onend will process
+    if(voiceRecognition){try{voiceRecognition.stop();}catch(err){}}
+  } else {
+    // Engine already stopped mid-hold — process whatever we captured
+    _processVoiceResult();
+  }
 }
 
 function _startRecognitionSession(){
@@ -1925,7 +1930,7 @@ function _startRecognitionSession(){
   voiceListening=true;
 
   voiceRecognition.onresult=e=>{
-    // Engine sends cumulative results — always take the full picture, never append
+    // Engine gives cumulative results — always take the full latest picture
     let fullFinal='';
     let latestInterim='';
     for(let i=0;i<e.results.length;i++){
@@ -1944,9 +1949,10 @@ function _startRecognitionSession(){
   voiceRecognition.onend=()=>{
     voiceListening=false;
     if(_buttonHeld){
-      // Engine timed out on silence mid-hold — restart, carrying over what we have
-      const carried=(_allFinals[0]||'').trim();
-      _restartRecognitionSession(carried);
+      // Engine stopped mid-hold due to silence — do NOT restart, just wait
+      // Keep what we have and show it; button release will process
+      const soFar=(_allFinals[0]||_lastInterim||'').trim();
+      if(soFar)showFabStatus('🎤 "'+soFar+'" — release to confirm');
     } else {
       document.getElementById('floatMic').classList.remove('holding');
       const label=document.getElementById('floatMicLabel');
@@ -1957,72 +1963,8 @@ function _startRecognitionSession(){
 
   voiceRecognition.onerror=e=>{
     voiceListening=false;
-    if((e.error==='no-speech'||e.error==='aborted')&&_buttonHeld){
-      _restartRecognitionSession((_allFinals[0]||'').trim());
-      return;
-    }
-    _buttonHeld=false;
-    document.getElementById('floatMic').classList.remove('holding');
-    const label=document.getElementById('floatMicLabel');
-    if(label)label.textContent='Hold';
-    showFabStatus('Error: '+e.error);
-    setTimeout(hideFabStatus,2000);
-  };
-
-  try{voiceRecognition.start();}catch(err){}
-}
-
-function _restartRecognitionSession(carriedTranscript){
-  // A forced restart due to engine silence timeout while button still held
-  // Start a fresh session but treat any new speech as additional to what was already captured
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  voiceRecognition=new SR();
-  voiceRecognition.lang='en-PH';
-  voiceRecognition.continuous=true;
-  voiceRecognition.interimResults=true;
-  voiceRecognition.maxAlternatives=1;
-  voiceListening=true;
-
-  if(carriedTranscript){
-    _allFinals=[carriedTranscript];
-    showFabStatus('🎤 "'+carriedTranscript+'"');
-  }
-
-  voiceRecognition.onresult=e=>{
-    // New session — engine results are fresh, not cumulative with previous session
-    // Append only truly new finals to the carried transcript
-    let newFinal='';
-    let latestInterim='';
-    for(let i=0;i<e.results.length;i++){
-      if(e.results[i].isFinal){
-        newFinal+=e.results[i][0].transcript+' ';
-      } else {
-        latestInterim+=e.results[i][0].transcript;
-      }
-    }
-    newFinal=newFinal.trim();
-    const fullFinal=(carriedTranscript?(carriedTranscript+' '):'')+newFinal;
-    _allFinals=fullFinal.trim()?[fullFinal.trim()]:[];
-    _lastInterim=latestInterim;
-    showFabStatus('🎤 "'+(fullFinal+(latestInterim?' '+latestInterim:'')).trim()+'"');
-  };
-
-  voiceRecognition.onend=()=>{
-    voiceListening=false;
-    if(_buttonHeld){
-      _restartRecognitionSession((_allFinals[0]||'').trim());
-    } else {
-      document.getElementById('floatMic').classList.remove('holding');
-      const label=document.getElementById('floatMicLabel');
-      if(label)label.textContent='Hold';
-      _processVoiceResult();
-    }
-  };
-
-  voiceRecognition.onerror=e=>{
-    voiceListening=false;
-    if((e.error==='no-speech'||e.error==='aborted')&&_buttonHeld){
-      _restartRecognitionSession((_allFinals[0]||'').trim());
+    if(e.error==='no-speech'||e.error==='aborted'){
+      // Ignore — button release will handle processing
       return;
     }
     _buttonHeld=false;
