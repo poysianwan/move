@@ -349,6 +349,9 @@ input,select,button{font-family:inherit}
   <div class="header">
     <div class="wordmark"><span class="wordmark-dot"></span>MOVEIT</div>
     <div class="header-right">
+      <button class="icon-btn" id="groqKeyBtn" onclick="openGroqKeyModal()" aria-label="Groq Whisper key" title="Set up Groq Whisper voice recognition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
       <button class="icon-btn" id="geminiKeyBtn" onclick="openGeminiKeyModal()" aria-label="Gemini AI key" title="Configure Gemini AI voice cleanup">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
       </button>
@@ -414,7 +417,7 @@ input,select,button{font-family:inherit}
         <!-- AI status indicator -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)">
           <span id="aiStatusPill" class="ai-status-pill inactive"><span class="ai-status-dot"></span>AI cleanup off</span>
-          <button onclick="openGeminiKeyModal()" style="font-size:10px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font-ui)" id="aiSetupBtn">Set up →</button>
+          <button onclick="localStorage.getItem('mi_groq_key')?openGeminiKeyModal():openGroqKeyModal()" style="font-size:10px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font-ui)" id="aiSetupBtn">Set up →</button>
         </div>
         <div class="qe-hints">
           <div class="qe-hint-title">Format Guide · or just speak it</div>
@@ -760,27 +763,43 @@ let swipeHintShown=localStorage.getItem('mi_swipe_hint')||false;
 // ════════════════════════════════════════
 
 function updateAIStatusPill(){
-  const hasKey=!!localStorage.getItem('mi_gemini_key');
+  const hasGroq=!!localStorage.getItem('mi_groq_key');
+  const hasGemini=!!localStorage.getItem('mi_gemini_key');
+  const bothReady=hasGroq&&hasGemini;
   const pill=document.getElementById('aiStatusPill');
   const btn=document.getElementById('aiSetupBtn');
   const fab=document.getElementById('floatMic');
+
+  // ── Groq key button icon ──
+  const groqBtn=document.getElementById('groqKeyBtn');
+  if(groqBtn)groqBtn.innerHTML=hasGroq
+    ?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--pos)" stroke-width="1.75"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>'
+    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+
+  // ── Gemini key button icon ──
+  const geminiBtn=document.getElementById('geminiKeyBtn');
+  if(geminiBtn)geminiBtn.innerHTML=hasGemini
+    ?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--pos)" stroke-width="1.75"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>'
+    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>';
+
   if(!pill)return;
-  if(hasKey){
+
+  if(bothReady){
     pill.className='ai-status-pill active';
-    pill.innerHTML='<span class="ai-status-dot"></span>Gemini AI active';
+    pill.innerHTML='<span class="ai-status-dot"></span>Voice + AI ready';
     if(btn)btn.style.display='none';
-    const keyBtn=document.getElementById('geminiKeyBtn');
-    if(keyBtn)keyBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="var(--pos)" stroke-width="1.75"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>';
-    // Restore FAB — fully active
     if(fab){fab.style.opacity='';fab.style.filter='';fab.title='Hold to record trip';}
-  }else{
+  } else {
     pill.className='ai-status-pill inactive';
-    pill.innerHTML='<span class="ai-status-dot"></span>AI key required';
+    if(!hasGroq&&!hasGemini){
+      pill.innerHTML='<span class="ai-status-dot"></span>Keys required';
+    } else if(!hasGroq){
+      pill.innerHTML='<span class="ai-status-dot"></span>Groq key missing';
+    } else {
+      pill.innerHTML='<span class="ai-status-dot"></span>Gemini key missing';
+    }
     if(btn){btn.style.display='';btn.textContent='Set up →';}
-    const keyBtn=document.getElementById('geminiKeyBtn');
-    if(keyBtn)keyBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>';
-    // Dim FAB to signal it's locked
-    if(fab){fab.style.opacity='0.4';fab.style.filter='grayscale(0.5)';fab.title='Set up Gemini AI key to use voice input';}
+    if(fab){fab.style.opacity='0.4';fab.style.filter='grayscale(0.5)';fab.title='Set up both API keys to use voice input';}
   }
 }
 
@@ -1197,27 +1216,79 @@ function parseGrabText(text){
 }
 
 // ════════════════════════════════════════
-// FLOATING MIC — HOLD TO RECORD
+// FLOATING MIC — GROQ WHISPER ENGINE
+// Hold → MediaRecorder captures audio →
+// Release → send to Groq Whisper → transcript
+// → Gemini sanitize → parse → confirm toast
 // ════════════════════════════════════════
-let voiceRecognition=null;
-let voiceListening=false;
+let _mediaRecorder=null;
+let _audioChunks=[];
 let _micPressTime=0;
 let _micHoldTimer=null;
 let _micInfoTimer=null;
 let _buttonHeld=false;
-let _allFinals=[];
-let _lastInterim='';
 let _isTouchDevice=false;
+let _micStream=null;
 const MIC_HOLD_THRESHOLD=250;
 
+// ── Groq key modal ────────────────────────────────────────────
+function openGroqKeyModal(){
+  const current=localStorage.getItem('mi_groq_key')||'';
+  const layer=document.getElementById('confirmDialog');
+  const box=layer.querySelector('.confirm-box');
+  box.innerHTML=`
+    <div style="width:36px;height:36px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent-mid);display:flex;align-items:center;justify-content:center;margin:0 auto var(--s3)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.75"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:var(--s1);color:var(--text-1)">Groq Whisper Key</div>
+    <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:var(--s4)">
+      Powers voice recording. Free at<br>
+      <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent)">console.groq.com/keys</a>
+    </div>
+    <div class="field" style="margin-bottom:var(--s3);text-align:left">
+      <label>Groq API Key</label>
+      <input type="password" id="groqKeyInput" placeholder="gsk_..." value="${current}" style="font-family:var(--font-num);font-size:13px">
+    </div>
+    <div style="display:flex;gap:var(--s2)">
+      <button class="btn btn-ghost" style="flex:1;min-height:40px;font-size:12px" onclick="closeGroqKeyModal()">Cancel</button>
+      ${current?`<button class="btn btn-danger" style="flex:1;min-height:40px;font-size:12px" onclick="clearGroqKey()">Remove</button>`:''}
+      <button class="btn btn-primary" style="flex:1;min-height:40px;font-size:12px" onclick="saveGroqKey()">Save</button>
+    </div>`;
+  layer.classList.add('open');
+  setTimeout(()=>document.getElementById('groqKeyInput')?.focus(),100);
+}
+function closeGroqKeyModal(){_restoreConfirmBox();}
+function saveGroqKey(){
+  const val=(document.getElementById('groqKeyInput')?.value||'').trim();
+  if(!val){showToastSimple('Paste your Groq API key first.');return;}
+  if(!val.startsWith('gsk_')){showToastSimple('Groq keys start with gsk_ — check and try again.');return;}
+  localStorage.setItem('mi_groq_key',val);
+  _restoreConfirmBox();
+  updateAIStatusPill();
+  showToastSimple('✓ Groq Whisper active — voice recording enabled.');
+}
+function clearGroqKey(){
+  localStorage.removeItem('mi_groq_key');
+  _restoreConfirmBox();
+  updateAIStatusPill();
+  showToastSimple('Groq key removed.');
+}
+
+// ── PTT handlers ──────────────────────────────────────────────
 function holdVoiceStart(e){
   if(e&&e.type==='touchstart'){_isTouchDevice=true;e.preventDefault();}
   else if(e&&e.type==='mousedown'&&_isTouchDevice){return;}
   if(_buttonHeld)return;
 
-  // ── Gate: Gemini key required ─────────────────────────────
+  // Gate: both keys required
+  if(!localStorage.getItem('mi_groq_key')){
+    showFabStatus('🔑 Groq key required — tap the mic icon to set up');
+    clearTimeout(_micInfoTimer);
+    _micInfoTimer=setTimeout(()=>{hideFabStatus();openGroqKeyModal();},1200);
+    return;
+  }
   if(!localStorage.getItem('mi_gemini_key')){
-    showFabStatus('🔑 Gemini AI key required — tap to set up');
+    showFabStatus('🔑 Gemini AI key required — tap the key icon to set up');
     clearTimeout(_micInfoTimer);
     _micInfoTimer=setTimeout(()=>{hideFabStatus();openGeminiKeyModal();},1200);
     return;
@@ -1225,11 +1296,11 @@ function holdVoiceStart(e){
 
   _micPressTime=Date.now();
   _micHoldTimer=setTimeout(()=>{
-    if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){showFabStatus('Voice not supported. Try Chrome or Kiwi.');return;}
-    _buttonHeld=true;_allFinals=[];_lastInterim='';
+    _buttonHeld=true;
+    _audioChunks=[];
     document.getElementById('floatMic').classList.add('holding');
-    showFabStatus('🎤 Listening...');
-    _startRecognitionSession();
+    showFabStatus('🎤 Recording... release to send');
+    _startMediaRecorder();
   },MIC_HOLD_THRESHOLD);
 }
 
@@ -1238,51 +1309,132 @@ function holdVoiceEnd(e){
   if(e&&e.type==='mouseleave'&&_isTouchDevice)return;
   const held=Date.now()-_micPressTime;
   clearTimeout(_micHoldTimer);
+
+  // Short tap with no key — already handled in start, nothing to do
+  if(!localStorage.getItem('mi_groq_key'))return;
+  if(!localStorage.getItem('mi_gemini_key'))return;
+
   if(held<MIC_HOLD_THRESHOLD){
-    // If no key and user did a short tap (not blocked by start) — show hint
-    if(!localStorage.getItem('mi_gemini_key'))return;
-    if(!_buttonHeld){showFabStatus('🎤 Press & hold to record — say your fare, e.g. "150 20 tip"');clearTimeout(_micInfoTimer);_micInfoTimer=setTimeout(hideFabStatus,3000);}
+    if(!_buttonHeld){
+      showFabStatus('🎤 Hold to record — say fare e.g. "150 70 tip"');
+      clearTimeout(_micInfoTimer);
+      _micInfoTimer=setTimeout(hideFabStatus,3000);
+    }
     return;
   }
   if(!_buttonHeld)return;
   _buttonHeld=false;
   document.getElementById('floatMic').classList.remove('holding');
-  if(voiceListening){if(voiceRecognition){try{voiceRecognition.stop();}catch(err){}}}
-  else{_processVoiceResult();}
+
+  // Stop recorder → triggers ondataavailable → onstop → transcribe
+  if(_mediaRecorder&&_mediaRecorder.state!=='inactive'){
+    showFabStatus('⏳ Transcribing...');
+    _mediaRecorder.stop();
+  }
 }
 
-function _startRecognitionSession(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  voiceRecognition=new SR();
-  voiceRecognition.lang='en-PH';voiceRecognition.continuous=true;voiceRecognition.interimResults=true;voiceRecognition.maxAlternatives=1;
-  voiceListening=true;
-  voiceRecognition.onresult=e=>{
-    let fullFinal='';let latestInterim='';
-    for(let i=0;i<e.results.length;i++){if(e.results[i].isFinal){fullFinal+=e.results[i][0].transcript+' ';}else{latestInterim+=e.results[i][0].transcript;}}
-    fullFinal=fullFinal.trim();_allFinals=fullFinal?[fullFinal]:[];_lastInterim=latestInterim;
-    const raw=(fullFinal+(latestInterim?' '+latestInterim:'')).trim();
-    showFabStatus('🎤 '+raw);
-  };
-  voiceRecognition.onend=()=>{
-    voiceListening=false;
-    if(_buttonHeld){const soFar=(_allFinals[0]||_lastInterim||'').trim();if(soFar)showFabStatus('🎤 '+soFar+' — release to confirm');}
-    else{document.getElementById('floatMic').classList.remove('holding');_processVoiceResult();}
-  };
-  voiceRecognition.onerror=e=>{
-    voiceListening=false;
-    if(e.error==='no-speech'||e.error==='aborted')return;
-    _buttonHeld=false;document.getElementById('floatMic').classList.remove('holding');
-    showFabStatus('Error: '+e.error);setTimeout(hideFabStatus,2000);
-  };
-  try{voiceRecognition.start();}catch(err){}
+// ── MediaRecorder setup ───────────────────────────────────────
+async function _startMediaRecorder(){
+  try{
+    // Reuse existing stream if still active, else request fresh
+    if(!_micStream||_micStream.getTracks().some(t=>t.readyState==='ended')){
+      _micStream=await navigator.mediaDevices.getUserMedia({
+        audio:{channelCount:1,sampleRate:16000,echoCancellation:true,noiseSuppression:true}
+      });
+    }
+    // Pick best supported format — Groq accepts webm, mp4, ogg, wav
+    const mimeType=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/ogg'].find(m=>MediaRecorder.isTypeSupported(m))||'';
+    _mediaRecorder=new MediaRecorder(_micStream,mimeType?{mimeType}:{});
+    _audioChunks=[];
+    _mediaRecorder.ondataavailable=ev=>{if(ev.data&&ev.data.size>0)_audioChunks.push(ev.data);};
+    _mediaRecorder.onstop=async()=>{
+      const blob=new Blob(_audioChunks,{type:_mediaRecorder.mimeType||'audio/webm'});
+      _audioChunks=[];
+      await _transcribeAndProcess(blob);
+    };
+    _mediaRecorder.onerror=err=>{
+      _buttonHeld=false;
+      document.getElementById('floatMic').classList.remove('holding');
+      showFabStatus('❌ Recorder error: '+err.error?.message);
+      setTimeout(hideFabStatus,3000);
+    };
+    _mediaRecorder.start(100); // collect chunks every 100ms
+  }catch(err){
+    _buttonHeld=false;
+    document.getElementById('floatMic').classList.remove('holding');
+    if(err.name==='NotAllowedError'||err.name==='PermissionDeniedError'){
+      showFabStatus('❌ Microphone permission denied — allow mic in browser settings');
+    } else {
+      showFabStatus('❌ Mic error: '+err.message);
+    }
+    setTimeout(hideFabStatus,4000);
+  }
+}
+
+// ── Groq Whisper transcription ────────────────────────────────
+async function _transcribeAndProcess(audioBlob){
+  const groqKey=localStorage.getItem('mi_groq_key');
+  if(!groqKey){showFabStatus('❌ No Groq key');setTimeout(hideFabStatus,2500);return;}
+
+  // Must have at least ~0.1s of audio (avoid empty recordings)
+  if(audioBlob.size<1000){
+    showFabStatus('Nothing recorded — hold longer next time');
+    setTimeout(hideFabStatus,2500);return;
+  }
+
+  try{
+    showFabStatus('⏳ Transcribing with Whisper...');
+
+    // Determine file extension from mime type
+    const mime=audioBlob.type||'audio/webm';
+    const ext=mime.includes('mp4')?'mp4':mime.includes('ogg')?'ogg':mime.includes('wav')?'wav':'webm';
+
+    const form=new FormData();
+    form.append('file',new File([audioBlob],`recording.${ext}`,{type:mime}));
+    form.append('model','whisper-large-v3-turbo'); // fastest Whisper on Groq, still excellent
+    form.append('language','en');                  // Filipino English — force English for numbers
+    form.append('response_format','text');          // plain text, no JSON wrapper needed
+    form.append('temperature','0');                 // deterministic
+
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),15000); // 15s timeout
+
+    const res=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+groqKey},
+      body:form,
+      signal:controller.signal
+    });
+    clearTimeout(timeout);
+
+    if(!res.ok){
+      const err=await res.json().catch(()=>({error:{message:'HTTP '+res.status}}));
+      throw new Error(err?.error?.message||'HTTP '+res.status);
+    }
+
+    const raw=(await res.text()).trim();
+    if(!raw){showFabStatus('Nothing heard — try again');setTimeout(hideFabStatus,2500);return;}
+
+    showFabStatus('🎤 "'+raw+'"');
+    await _processVoiceResult(raw);
+
+  }catch(err){
+    if(err.name==='AbortError'){
+      showFabStatus('❌ Transcription timed out — check connection');
+    } else if(err.message.includes('401')||err.message.includes('invalid_api_key')){
+      showFabStatus('❌ Invalid Groq key — tap key icon to update');
+    } else {
+      showFabStatus('❌ Whisper error: '+err.message);
+    }
+    setTimeout(hideFabStatus,4000);
+  }
 }
 
 // ════════════════════════════════════════
 // PROCESS VOICE — AI + LOCAL VALIDATION
 // ════════════════════════════════════════
-async function _processVoiceResult(){
-  const raw=(_allFinals.join(' ')||_lastInterim).trim();
-  if(!raw){showFabStatus('Nothing heard — try again');setTimeout(hideFabStatus,2500);return;}
+async function _processVoiceResult(raw){
+  if(!raw||!raw.trim()){showFabStatus('Nothing heard — try again');setTimeout(hideFabStatus,2500);return;}
 
   // ── Step 1: Gemini AI sanitization (if key set) ──────────
   const hasKey=!!localStorage.getItem('mi_gemini_key');
