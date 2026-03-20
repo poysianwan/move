@@ -459,14 +459,13 @@ input,select,button{font-family:inherit}
           <button onclick="localStorage.getItem('mi_groq_key')?openGeminiKeyModal():openGroqKeyModal()" style="font-size:10px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font-ui)" id="aiSetupBtn">Set up →</button>
         </div>
         <div class="qe-hints">
-          <div class="qe-hint-title">Format Guide · or just speak it</div>
-          <div class="qe-hint-row"><code>150 cash</code><span>₱150 fare, 20% comm deducted → ₱120 take-home</span></div>
-          <div class="qe-hint-row"><code>150 wallet</code><span>₱150 Grab wallet → full ₱150 take-home, no comm</span></div>
+          <div class="qe-hint-title">Voice · say fare + payment type</div>
+          <div class="qe-hint-row"><code>150 cash</code><span>₱150 fare, 20% comm deducted → ₱120</span></div>
+          <div class="qe-hint-row"><code>150 wallet</code><span>₱150 Grab wallet → full ₱150, no comm</span></div>
           <div class="qe-hint-row"><code>150</code><span>no type → picker asks Cash or Wallet</span></div>
           <div class="qe-hint-row"><code>147 150</code><span>fare ₱147, customer gave ₱150 → tip ₱3</span></div>
           <div class="qe-hint-row"><code>150 20 tip cash</code><span>₱150 fare + ₱20 tip, cash payment</span></div>
-          <div class="qe-hint-row"><code>150 18 commission</code><span>₱150 fare, 18% commission rate</span></div>
-          <div class="qe-hint-row"><code>50 10%</code><span>₱50 fare, 10% commission via percent</span></div>
+          <div class="qe-hint-row" style="color:var(--text-3);font-size:11px">Custom commission % → use Detailed tab</div>
         </div>
       </div>
 
@@ -941,13 +940,15 @@ async function geminiSanitize(rawText){
 
 STRICT OUTPUT RULES — violating any rule makes the output useless:
 1. Output ONLY the cleaned token string. NOTHING else — no labels, no "Output:", no explanation, no punctuation, no quotes.
-2. Valid output tokens are ONLY: integers (no decimals, no commas), the symbol %, and the keywords: tip, commission, cash, wallet
+2. Valid output tokens are ONLY: integers (no decimals, no commas) and the keywords: tip, cash, wallet
 3. Every number in your output MUST come from the input. NEVER invent or add numbers.
-4. Remove ALL non-number, non-keyword content: filler words, names, places, greetings, directions, currency symbols (₱), commas, periods.
-   - KEEP the words: cash, wallet, tip, commission if spoken.
-   - KEEP the % symbol or the word "percent" — convert "percent" → %
+4. Remove ALL non-number, non-keyword content: filler words, names, places, greetings, directions, currency symbols (₱), percent signs (%), commission rates, commas, periods.
+   - KEEP the words: cash, wallet, tip if spoken.
+   - STRIP commission rates, percent signs, and the word commission entirely.
    - "one hundred cash" → 100 cash
    - "one fifty wallet" → 150 wallet
+   - "150 18 commission" → 150  (strip commission rate)
+   - "150 18%" → 150  (strip percent)
    - "one fifty" → 150  (no payment type — leave it out, do NOT guess)
 5. FIX run-together numbers (speech recognition merges separate numbers):
    - Max valid fare or tip = 3 digits (₱10–₱999). Never output a number > 999.
@@ -960,22 +961,16 @@ STRICT OUTPUT RULES — violating any rule makes the output useless:
    - "150 150" → 150
    - "150 20 tip 150 20 tip" → 150 20 tip
    - Two DIFFERENT numbers like "147 150" are NOT a duplicate — keep both.
-7. Keyword placement: keyword always comes AFTER its number. Write "20 tip" not "tip 20". Write "10%" not "%10".
-8. For commission expressed as percent: output the number followed by % — e.g. "ten percent" → 10% | "18 percent" → 18%
-   Alternatively if user says "commission" as a word, output number then "commission" — e.g. "18 commission"
-   Both "18%" and "18 commission" are valid and equivalent.
-9. Max output length: at most 6 tokens (e.g. "150 20 tip 10% cash"). If you have more, you are hallucinating — trim.
-10. Commission/percent must be a realistic rate: 1–50. If outside this range, drop it.
-11. If the input contains zero recognizable numbers, output exactly the single word: UNCLEAR
+7. Keyword placement: keyword always comes AFTER its number. Write "20 tip" not "tip 20".
+8. Max output length: at most 4 tokens (fare + optional tip amount + tip keyword + optional cash/wallet). If you have more, trim.
+9. If the input contains zero recognizable numbers, output exactly the single word: UNCLEAR
 
 EXAMPLES (input → correct output):
 "one fifty" → 150
 "150 20 tip" → 150 20 tip
-"50 10 percent" → 50 10%
-"50 10%" → 50 10%
-"50 ten percent" → 50 10%
-"150 18 percent cash" → 150 18% cash
-"150 20 tip 18 percent" → 150 20 tip 18%
+"150 cash" → 150 cash
+"150 wallet" → 150 wallet
+"150 20 tip cash" → 150 20 tip cash
 "3050" → 30 50
 "30 50 fast delivery" → 30 50
 "15020tip" → 150 20 tip
@@ -983,8 +978,9 @@ EXAMPLES (input → correct output):
 "150 70 150 70" → 150 70
 "150 150" → 150
 "one forty seven one fifty" → 147 150
-"uhh ₱150 18% commission" → 150 18%
-"150 20 tip 18 commission" → 150 20 tip 18 commission
+"150 18% commission" → 150
+"150 18 commission" → 150
+"uhh 150 18 percent" → 150
 "hello po good morning" → UNCLEAR
 "Output: 150" → 150
 "150 20 tip 150 20 tip" → 150 20 tip
@@ -1577,13 +1573,9 @@ async function _processVoiceResult(raw){
   }
 
   // ── Step 4: Local validation pass (always runs) ─────────
-  // Preserve NUMBER% patterns before stripping — convert to "NUMBER commission"
-  // so parseQuick can detect the commission rate (it handles both forms)
-  cleaned=cleaned.replace(/\b(\d+)\s*%/g,'$1 commission');
-
-  // Now safe to strip remaining special characters
+  // Strip all special characters — commission is handled in detailed form only
   cleaned=cleaned
-    .replace(/[₱$,!?.'";:@#^&*()[\]{}|\\/<>]/g,'')
+    .replace(/[₱%$,!?.'";:@#^&*()[\]{}|\\/<>]/g,'')
     .replace(/[^\d\s\.a-zA-Z]/g,'')
     .replace(/\s+/g,' ').trim();
 
@@ -1594,11 +1586,11 @@ async function _processVoiceResult(raw){
   // Catches cases where speech recognition echoes the input twice
   cleaned=_dedupeSequence(cleaned);
 
-  // Remove every word that is NOT a number OR an allowed keyword
-  // Allowed keywords: tip, commission (and only those two)
+  // Remove every word that is NOT a number OR an allowed voice keyword
+  // Voice keywords: tip, cash, wallet only (commission handled in detailed form)
   cleaned=cleaned
     .split(' ')
-    .filter(tok=>/^\d+(\.\d+)?$/.test(tok)||/^\d+%$/.test(tok)||/^(tip|commission|cash|wallet)$/i.test(tok))
+    .filter(tok=>/^\d+(\.\d+)?$/.test(tok)||/^(tip|cash|wallet)$/i.test(tok))
     .join(' ')
     .trim();
 
@@ -1799,9 +1791,7 @@ function cleanVoiceInput(text){
   // Single word numbers
   s=s.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,m=>WMAP[m]!==undefined?String(WMAP[m]):m);
 
-  // Remove non-keyword words
-  s=s.replace(/\b(?!tip\b|commission\b|cash\b|wallet\b|percent\b|\d)(\w+)\b/g,'');
-  s=s.replace(/\bpercent\b/g,'%');
+  s=s.replace(/\b(?!tip\b|cash\b|wallet\b|\d)(\w+)\b/g,'');
   s=s.replace(/\s+/g,' ').trim();
   return s;
 }
@@ -1882,8 +1872,7 @@ function parseQuick(raw){
   const s=raw.trim().toLowerCase();if(!s)return null;
   let fare=null,tip=0,comm=DEFAULT_COMM;
 
-  // ── Payment type detection ─────────────────────────────────
-  // cash → apply commission | wallet → 0% commission | null → ask user
+  // ── Payment type detection ──────────────────────────────
   let _payType=null;
   if(/\bcash\b/.test(s))_payType='cash';
   else if(/\bwallet\b/.test(s))_payType='wallet';
@@ -1891,26 +1880,32 @@ function parseQuick(raw){
   // Strip payment keywords before parsing numbers
   const clean=s.replace(/\b(cash|wallet)\b/g,'').replace(/\s+/g,' ').trim();
 
-  const tipAfter=clean.match(/\btip\s+(\d+(?:\.\d+)?)/);const tipBefore=clean.match(/(\d+(?:\.\d+)?)\s+tip\b/);
-  if(tipAfter)tip=parseFloat(tipAfter[1]);else if(tipBefore)tip=parseFloat(tipBefore[1]);
-  const commAfter=clean.match(/\bcommission\s+(\d+(?:\.\d+)?)/);const commBefore=clean.match(/(\d+(?:\.\d+)?)\s+commission\b/);const commPct=clean.match(/(\d+(?:\.\d+)?)\s*%/);
-  let _explicitComm=false;
-  if(commAfter){comm=parseFloat(commAfter[1]);_explicitComm=true;}
-  else if(commBefore){comm=parseFloat(commBefore[1]);_explicitComm=true;}
-  else if(commPct){comm=parseFloat(commPct[1]);_explicitComm=true;}
+  // Tip detection only — commission is always DEFAULT_COMM for voice
+  const tipAfter=clean.match(/\btip\s+(\d+(?:\.\d+)?)/);
+  const tipBefore=clean.match(/(\d+(?:\.\d+)?)\s+tip\b/);
+  if(tipAfter)tip=parseFloat(tipAfter[1]);
+  else if(tipBefore)tip=parseFloat(tipBefore[1]);
 
-  // Override commission based on payment type
-  // wallet → always 0%, cash → use DEFAULT_COMM unless explicitly stated
+  // wallet → 0% commission, cash/unset → DEFAULT_COMM
   if(_payType==='wallet')comm=0;
-  else if(_payType==='cash'&&!commAfter&&!commBefore&&!commPct)comm=DEFAULT_COMM;
 
-  let stripped=clean.replace(/\btip\s+\d+(?:\.\d+)?/g,'').replace(/\d+(?:\.\d+)?\s+tip\b/g,'').replace(/\bcommission\s+\d+(?:\.\d+)?/g,'').replace(/\d+(?:\.\d+)?\s+commission\b/g,'').replace(/\d+(?:\.\d+)?\s*%/g,'').replace(/\s+/g,' ').trim();
+  // Strip tip from string to isolate fare
+  let stripped=clean
+    .replace(/\btip\s+\d+(?:\.\d+)?/g,'')
+    .replace(/\d+(?:\.\d+)?\s+tip\b/g,'')
+    .replace(/\s+/g,' ').trim();
+
   const bareNums=stripped.match(/(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)/);
-  if(bareNums&&tip===0){const n1=parseFloat(bareNums[1]),n2=parseFloat(bareNums[2]);if(n2>n1){fare=n1;tip=Math.round((n2-n1)*100)/100;}else{fare=n1;}}
-  else{const fM=stripped.match(/(\d+(?:\.\d+)?)/);if(fM)fare=parseFloat(fM[1]);}
+  if(bareNums&&tip===0){
+    const n1=parseFloat(bareNums[1]),n2=parseFloat(bareNums[2]);
+    if(n2>n1){fare=n1;tip=Math.round((n2-n1)*100)/100;}
+    else{fare=n1;}
+  } else {
+    const fM=stripped.match(/(\d+(?:\.\d+)?)/);if(fM)fare=parseFloat(fM[1]);
+  }
   if(!fare||fare<=0)return{error:'No fare found'};
   const commAmt=fare*(comm/100);
-  return{fare,tip,commRate:comm,commAmt,net:fare-commAmt+tip,_payType,_explicitComm};
+  return{fare,tip,commRate:comm,commAmt,net:fare-commAmt+tip,_payType,_explicitComm:false};
 }
 
 function showFabStatus(msg){const el=document.getElementById('voiceFabStatus');el.textContent=msg;el.style.display='block';}
@@ -1939,15 +1934,13 @@ function addTripForm(){
   const actualPay=parseFloat(document.getElementById('tripActualPay').value)||0;
   const commInput=parseFloat(document.getElementById('tripComm').value);
   const commRate=isNaN(commInput)?DEFAULT_COMM:commInput;
+  const explicitComm=!isNaN(commInput); // user typed a value → treat as explicit
   if(fare<=0){showToastSimple('Enter a fare amount first.');return;}
-  // tip = difference between actual pay and fare (only if customer paid more)
   const tip=actualPay>fare?Math.round((actualPay-fare)*100)/100:0;
   const commAmt=Math.round(fare*(commRate/100)*100)/100;
-  const trip={fare,tip,commRate,commAmt,net:fare-commAmt+tip,id:Date.now(),_payType:null};
-  // Clear fields
+  const trip={fare,tip,commRate,commAmt,net:fare-commAmt+tip,id:Date.now(),_payType:null,_explicitComm:explicitComm};
   ['tripFare','tripActualPay'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('formPreview').style.display='none';
-  // Build display text for confirm toast
   const displayText=fare+(tip>0?' '+actualPay+' actual pay':'');
   showVoiceConfirm(displayText,trip);
 }
