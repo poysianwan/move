@@ -972,7 +972,7 @@ Raw transcript: "${rawText}"
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           contents:[{parts:[{text:prompt}]}],
-          generationConfig:{temperature:0.0,maxOutputTokens:32,stopSequences:['\n']}
+          generationConfig:{temperature:0.1,maxOutputTokens:32,stopSequences:['\n']}
         }),
         signal:controller.signal
       }
@@ -1072,8 +1072,16 @@ Raw transcript: "${rawText}"
     return result;
 
   }catch(err){
-    if(err.name==='AbortError')console.warn('Gemini timeout — falling back to local');
-    else console.warn('Gemini fallback to local:',err.message);
+    if(err.name==='AbortError'){
+      showFabStatus('⚠️ AI timeout — using local cleanup');
+    } else if(err.message.includes('401')||err.message.includes('API_KEY')){
+      showFabStatus('⚠️ Gemini key invalid — tap 🔑 to update');
+      setTimeout(()=>{hideFabStatus();openGeminiKeyModal();},2000);
+    } else {
+      showFabStatus('⚠️ AI error — using local cleanup');
+    }
+    // Show briefly then continue with local fallback (don't block processing)
+    setTimeout(hideFabStatus,2000);
     return null;
   }
 }
@@ -1472,13 +1480,18 @@ async function _transcribeAndProcess(audioBlob){
 
   }catch(err){
     if(err.name==='AbortError'){
-      showFabStatus('❌ Transcription timed out — check connection');
-    } else if(err.message.includes('401')||err.message.includes('invalid_api_key')){
-      showFabStatus('❌ Invalid Groq key — tap key icon to update');
+      showFabStatus('❌ Timed out — check internet connection');
+    } else if(err.message.includes('401')||err.message.includes('invalid_api_key')||err.message.includes('Unauthorized')){
+      showFabStatus('❌ Invalid Groq key — tap 🎤 icon to update');
+      setTimeout(()=>{hideFabStatus();openGroqKeyModal();},2500);
+    } else if(err.message.includes('413')||err.message.includes('too large')){
+      showFabStatus('❌ Recording too long — keep under 30 seconds');
+    } else if(err.message.includes('429')||err.message.includes('rate')){
+      showFabStatus('❌ Rate limit — wait a moment and try again');
     } else {
-      showFabStatus('❌ Whisper error: '+err.message);
+      showFabStatus('❌ '+err.message);
     }
-    setTimeout(hideFabStatus,4000);
+    setTimeout(hideFabStatus,5000);
   }
 }
 
@@ -1677,13 +1690,34 @@ const WORD_NUMS={
 function cleanVoiceInput(text){
   let s=text.toLowerCase().trim();
   s=s.replace(/-/g,' ');
+
+  // ── Compound spoken number patterns (Whisper often returns these) ──
+  // "one fifty" → 150, "one seventy" → 170, "one forty seven" → 147
+  // Pattern: single-digit word + tens word (+ optional ones word)
+  const ones=['zero','one','two','three','four','five','six','seven','eight','nine'];
+  const tens=['twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+  const WMAP={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+  // "one fifty three" → 153
+  s=s.replace(/\b(one|two|three|four|five|six|seven|eight|nine)\s+(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s+(one|two|three|four|five|six|seven|eight|nine)\b/g,(m,h,t,o)=>String((WMAP[h]||0)*100+(WMAP[t]||0)+(WMAP[o]||0)));
+  // "one fifty" → 150, "one seventy" → 170
+  s=s.replace(/\b(one|two|three|four|five|six|seven|eight|nine)\s+(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,(m,h,t)=>String((WMAP[h]||0)*100+(WMAP[t]||0)));
+
+  // Split run-together digit groups
   s=s.replace(/\b(\d{3})(\d{3})\b/g,'$1 $2');
   s=s.replace(/\b(\d{3})(\d{2})\b/g,'$1 $2');
   s=s.replace(/\b(\d{3,4})(\d{3})\b/g,'$1 $2');
-  s=s.replace(/\b(\w+)\s+hundred(?:\s+and)?\s+(\w+)\b/g,(m,a,b)=>{const av=WORD_NUMS[a],bv=WORD_NUMS[b];if(av!==undefined&&bv!==undefined)return String(av*100+bv);return m;});
-  s=s.replace(/\b(\w+)\s+hundred\b/g,(m,a)=>{const av=WORD_NUMS[a];return av!==undefined?String(av*100):m;});
-  s=s.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s+(one|two|three|four|five|six|seven|eight|nine)\b/g,(m,tens,ones)=>String(WORD_NUMS[tens]+WORD_NUMS[ones]));
-  s=s.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,m=>WORD_NUMS[m]!==undefined?String(WORD_NUMS[m]):m);
+
+  // "one hundred fifty" → 150
+  s=s.replace(/\b(\w+)\s+hundred(?:\s+and)?\s+(\w+)\b/g,(m,a,b)=>{const av=WMAP[a],bv=WMAP[b];if(av!==undefined&&bv!==undefined)return String(av*100+bv);return m;});
+  s=s.replace(/\b(\w+)\s+hundred\b/g,(m,a)=>{const av=WMAP[a];return av!==undefined?String(av*100):m;});
+
+  // "twenty five" → 25
+  s=s.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s+(one|two|three|four|five|six|seven|eight|nine)\b/g,(m,t,o)=>String(WMAP[t]+WMAP[o]));
+
+  // Single word numbers
+  s=s.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,m=>WMAP[m]!==undefined?String(WMAP[m]):m);
+
+  // Remove non-keyword words
   s=s.replace(/\b(?!tip\b|commission\b|cash\b|wallet\b|percent\b|\d)(\w+)\b/g,'');
   s=s.replace(/\bpercent\b/g,'%');
   s=s.replace(/\s+/g,' ').trim();
