@@ -466,6 +466,7 @@ input,select,button{font-family:inherit}
           <div class="qe-hint-row"><code>147 150</code><span>fare ₱147, customer gave ₱150 → tip ₱3</span></div>
           <div class="qe-hint-row"><code>150 20 tip cash</code><span>₱150 fare + ₱20 tip, cash payment</span></div>
           <div class="qe-hint-row"><code>150 18 commission</code><span>₱150 fare, 18% commission rate</span></div>
+          <div class="qe-hint-row"><code>50 10%</code><span>₱50 fare, 10% commission via percent</span></div>
         </div>
       </div>
 
@@ -940,10 +941,11 @@ async function geminiSanitize(rawText){
 
 STRICT OUTPUT RULES — violating any rule makes the output useless:
 1. Output ONLY the cleaned token string. NOTHING else — no labels, no "Output:", no explanation, no punctuation, no quotes.
-2. Valid output tokens are ONLY: integers (no decimals, no commas) and the keywords: tip, commission, cash, wallet
+2. Valid output tokens are ONLY: integers (no decimals, no commas), the symbol %, and the keywords: tip, commission, cash, wallet
 3. Every number in your output MUST come from the input. NEVER invent or add numbers.
-4. Remove ALL non-number, non-keyword content: filler words, names, places, greetings, directions, currency symbols (₱), percent signs (%), commas, periods.
+4. Remove ALL non-number, non-keyword content: filler words, names, places, greetings, directions, currency symbols (₱), commas, periods.
    - KEEP the words: cash, wallet, tip, commission if spoken.
+   - KEEP the % symbol or the word "percent" — convert "percent" → %
    - "one hundred cash" → 100 cash
    - "one fifty wallet" → 150 wallet
    - "one fifty" → 150  (no payment type — leave it out, do NOT guess)
@@ -958,14 +960,22 @@ STRICT OUTPUT RULES — violating any rule makes the output useless:
    - "150 150" → 150
    - "150 20 tip 150 20 tip" → 150 20 tip
    - Two DIFFERENT numbers like "147 150" are NOT a duplicate — keep both.
-7. Keyword placement: keyword always comes AFTER its number. Write "20 tip" not "tip 20".
-8. Max output length: at most 5 tokens (e.g. "150 20 tip 18 commission"). If you have more, you are hallucinating — trim to the first valid fare + optional tip + optional commission.
-9. Commission must be a realistic rate: 1–50. If a number labeled commission is outside this range, drop it and use the default (do NOT output it).
-10. If the input contains zero recognizable numbers, output exactly the single word: UNCLEAR
+7. Keyword placement: keyword always comes AFTER its number. Write "20 tip" not "tip 20". Write "10%" not "%10".
+8. For commission expressed as percent: output the number followed by % — e.g. "ten percent" → 10% | "18 percent" → 18%
+   Alternatively if user says "commission" as a word, output number then "commission" — e.g. "18 commission"
+   Both "18%" and "18 commission" are valid and equivalent.
+9. Max output length: at most 6 tokens (e.g. "150 20 tip 10% cash"). If you have more, you are hallucinating — trim.
+10. Commission/percent must be a realistic rate: 1–50. If outside this range, drop it.
+11. If the input contains zero recognizable numbers, output exactly the single word: UNCLEAR
 
 EXAMPLES (input → correct output):
 "one fifty" → 150
 "150 20 tip" → 150 20 tip
+"50 10 percent" → 50 10%
+"50 10%" → 50 10%
+"50 ten percent" → 50 10%
+"150 18 percent cash" → 150 18% cash
+"150 20 tip 18 percent" → 150 20 tip 18%
 "3050" → 30 50
 "30 50 fast delivery" → 30 50
 "15020tip" → 150 20 tip
@@ -973,7 +983,7 @@ EXAMPLES (input → correct output):
 "150 70 150 70" → 150 70
 "150 150" → 150
 "one forty seven one fifty" → 147 150
-"uhh ₱150 18% commission" → 150 18 commission
+"uhh ₱150 18% commission" → 150 18%
 "150 20 tip 18 commission" → 150 20 tip 18 commission
 "hello po good morning" → UNCLEAR
 "Output: 150" → 150
@@ -1024,33 +1034,59 @@ Raw transcript: "${rawText}"
     out=out.replace(/\b(\d+)\.\d+\b/g,'$1');
 
     // Gap 5 / Gap 13: if output is ONLY a keyword with no number → UNCLEAR
-    if(/^(tip|commission|cash|wallet)$/i.test(out.trim())&&!/\d/.test(out))return'UNCLEAR';
+    if(/^(tip|commission|cash|wallet|%)$/i.test(out.trim())&&!/\d/.test(out))return'UNCLEAR';
 
     // Gap 5: UNCLEAR check (case-insensitive, handle extra spaces)
     if(!out||/^unclear$/i.test(out.trim()))return'UNCLEAR';
 
-    // Tokenize — only keep integers and the two allowed keywords
-    const tokens=out.split(' ').filter(t=>t.length>0);
-    const clean=tokens.filter(t=>/^\d+$/.test(t)||/^(tip|commission|cash|wallet)$/i.test(t));
+    // Convert "percent" word to % symbol if Gemini outputs it as a word
+    out=out.replace(/\bpercent\b/gi,'%');
+    // Normalise "18%" that may have been written as "18 %" (with a space) → "18%"
+    out=out.replace(/(\d)\s+%/g,'$1%');
 
-    // Gap 12 / Gap 14: remove numbers that are 0, negative, or single-digit
-    // (single-digit can't be a fare — minimum realistic fare is ₱10)
+    // Tokenize — keep integers, NUMBER%, lone %, and allowed keywords
+    const tokens=out.split(' ').filter(t=>t.length>0);
+    const clean=tokens.filter(t=>
+      /^\d+$/.test(t)||           // plain integer
+      /^\d+%$/.test(t)||          // e.g. "18%"
+      /^%$/.test(t)||             // lone % (will be handled below)
+      /^(tip|commission|cash|wallet)$/i.test(t)
+    );
+
+    // Merge lone % onto the preceding number: ["18", "%"] → ["18%"]
+    const merged=[];
+    for(let i=0;i<clean.length;i++){
+      if(clean[i]==='%'&&merged.length>0&&/^\d+$/.test(merged[merged.length-1])){
+        merged[merged.length-1]=merged[merged.length-1]+'%';
+      } else {
+        merged.push(clean[i]);
+      }
+    }
+
+    // Gap 12 / Gap 14: remove numbers that are 0 or single-digit (< 10)
+    // BUT: allow single-digit commission rates like "5%" to pass — check context
     const validTokens=[];
-    for(const t of clean){
+    for(const t of merged){
       if(/^(tip|commission|cash|wallet)$/i.test(t)){validTokens.push(t.toLowerCase());continue;}
+      if(/^\d+%$/.test(t)){
+        // Commission rate token — validate 1-50
+        const rate=parseInt(t,10);
+        if(rate>=1&&rate<=50)validTokens.push(t);
+        continue;
+      }
       const n=parseInt(t,10);
-      if(n<10)continue; // too small to be a fare or tip
+      if(n<10)continue; // too small to be fare or tip
       validTokens.push(String(n));
     }
 
-    // Gap 3: clamp any number > 999 — split it or drop it
+    // Gap 3: clamp any plain number > 999
     const clamped=[];
     for(const t of validTokens){
       if(/^(tip|commission|cash|wallet)$/i.test(t)){clamped.push(t);continue;}
+      if(/^\d+%$/.test(t)){clamped.push(t);continue;} // commission % — keep as-is
       const n=parseInt(t,10);
       if(n<=999){clamped.push(t);}
       else{
-        // Try to split: e.g. 1500 → 150 0 (drop), 15020 → 150 20
         const s=String(n);
         const a=parseInt(s.slice(0,3),10),b=parseInt(s.slice(3)||'0',10);
         if(a>=30&&a<=999)clamped.push(String(a));
@@ -1058,30 +1094,27 @@ Raw transcript: "${rawText}"
       }
     }
 
-    // Gap 6: commission value must be 1–50 (a realistic commission rate %)
-    // Find any number tagged as commission and validate it
+    // Gap 6: validate plain "commission" keyword — number before it must be 1–50
     const commIdx=clamped.findIndex(t=>/^commission$/i.test(t));
     if(commIdx>0){
       const commVal=parseInt(clamped[commIdx-1],10);
-      if(commVal<1||commVal>50){
-        // Drop both the bad rate and the keyword
-        clamped.splice(commIdx-1,2);
-      }
+      if(commVal<1||commVal>50)clamped.splice(commIdx-1,2);
     }
 
-    // Gap 7: max 5 tokens — if more, something went wrong, trim
-    const trimmed=clamped.slice(0,5);
+    // Gap 7: max 6 tokens
+    const trimmed=clamped.slice(0,6);
 
-    // Gap 16: keyword must not be the first token (no leading orphan keywords)
-    while(trimmed.length>0&&/^(tip|commission)$/i.test(trimmed[0]))trimmed.shift(); // cash/wallet can lead
+    // Gap 16: keyword must not be the first token
+    while(trimmed.length>0&&/^(tip|commission|%)$/i.test(trimmed[0]))trimmed.shift();
 
-    // Gap 17+18: deduplicate repeated keywords — keep only the first tip and first commission
-    const seen={tip:false,commission:false};
+    // Gap 17+18: deduplicate repeated keywords
+    const seen={tip:false,commission:false,pct:false};
     const deduped=[];
     for(let i=0;i<trimmed.length;i++){
       const t=trimmed[i];
-      if(/^tip$/i.test(t)){if(!seen.tip){seen.tip=true;deduped.push(t);}else{deduped.pop();}}// drop number before second tip too
+      if(/^tip$/i.test(t)){if(!seen.tip){seen.tip=true;deduped.push(t);}else{deduped.pop();}}
       else if(/^commission$/i.test(t)){if(!seen.commission){seen.commission=true;deduped.push(t);}else{deduped.pop();}}
+      else if(/^\d+%$/.test(t)){if(!seen.pct){seen.pct=true;deduped.push(t);}else{deduped.pop();}}
       else{deduped.push(t);}
     }
 
@@ -1561,7 +1594,7 @@ async function _processVoiceResult(raw){
   // Allowed keywords: tip, commission (and only those two)
   cleaned=cleaned
     .split(' ')
-    .filter(tok=>/^\d+(\.\d+)?$/.test(tok)||/^(tip|commission|cash|wallet)$/i.test(tok))
+    .filter(tok=>/^\d+(\.\d+)?$/.test(tok)||/^\d+%$/.test(tok)||/^(tip|commission|cash|wallet)$/i.test(tok))
     .join(' ')
     .trim();
 
