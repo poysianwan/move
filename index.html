@@ -1562,10 +1562,6 @@ async function _processVoiceResult(raw){
   if(hasKey){
     showFabStatus('🤖 AI cleaning input...');
     cleaned=await geminiSanitize(raw);
-    // DEBUG: show exactly what Gemini returned
-    console.log('[Voice] raw:',raw,'| Gemini:',cleaned);
-    showFabStatus('🤖 Gemini: "'+cleaned+'"');
-    await new Promise(r=>setTimeout(r,1500)); // pause so user can see it
   }
 
   // ── Step 2: UNCLEAR = rejected ──────────────────────────
@@ -1612,11 +1608,7 @@ async function _processVoiceResult(raw){
   }
 
   // ── Step 5: Parse ────────────────────────────────────────
-  console.log('[Voice] final cleaned for parseQuick:',cleaned);
-  showFabStatus('📋 Parsing: "'+cleaned+'"');
-  await new Promise(r=>setTimeout(r,1500));
   const r=parseQuick(cleaned);
-  console.log('[Voice] parseQuick result:',JSON.stringify(r));
   if(r&&!r.error){
     hideFabStatus();
     showVoiceConfirm(cleaned,r);
@@ -1730,16 +1722,19 @@ function pickPayment(type){
   const text=_pickerText||'';
 
   // Apply commission based on chosen type
+  // Preserve any explicitly parsed commRate — only use DEFAULT_COMM as fallback
   if(type==='cash'){
     trip._payType='cash';
-    trip.commRate=DEFAULT_COMM;
-    trip.commAmt=trip.fare*(DEFAULT_COMM/100);
-    trip.net=trip.fare-trip.commAmt+(trip.tip||0);
+    // Keep the parsed commission rate if user stated one, otherwise default
+    const rate=trip._explicitComm?trip.commRate:DEFAULT_COMM;
+    trip.commRate=rate;
+    trip.commAmt=Math.round(trip.fare*(rate/100)*100)/100;
+    trip.net=Math.round((trip.fare-trip.commAmt+(trip.tip||0))*100)/100;
   } else {
     trip._payType='wallet';
     trip.commRate=0;
     trip.commAmt=0;
-    trip.net=trip.fare+(trip.tip||0);
+    trip.net=Math.round((trip.fare+(trip.tip||0))*100)/100;
   }
 
   _pickerTrip=null;
@@ -1899,7 +1894,10 @@ function parseQuick(raw){
   const tipAfter=clean.match(/\btip\s+(\d+(?:\.\d+)?)/);const tipBefore=clean.match(/(\d+(?:\.\d+)?)\s+tip\b/);
   if(tipAfter)tip=parseFloat(tipAfter[1]);else if(tipBefore)tip=parseFloat(tipBefore[1]);
   const commAfter=clean.match(/\bcommission\s+(\d+(?:\.\d+)?)/);const commBefore=clean.match(/(\d+(?:\.\d+)?)\s+commission\b/);const commPct=clean.match(/(\d+(?:\.\d+)?)\s*%/);
-  if(commAfter)comm=parseFloat(commAfter[1]);else if(commBefore)comm=parseFloat(commBefore[1]);else if(commPct)comm=parseFloat(commPct[1]);
+  let _explicitComm=false;
+  if(commAfter){comm=parseFloat(commAfter[1]);_explicitComm=true;}
+  else if(commBefore){comm=parseFloat(commBefore[1]);_explicitComm=true;}
+  else if(commPct){comm=parseFloat(commPct[1]);_explicitComm=true;}
 
   // Override commission based on payment type
   // wallet → always 0%, cash → use DEFAULT_COMM unless explicitly stated
@@ -1912,7 +1910,7 @@ function parseQuick(raw){
   else{const fM=stripped.match(/(\d+(?:\.\d+)?)/);if(fM)fare=parseFloat(fM[1]);}
   if(!fare||fare<=0)return{error:'No fare found'};
   const commAmt=fare*(comm/100);
-  return{fare,tip,commRate:comm,commAmt,net:fare-commAmt+tip,_payType};
+  return{fare,tip,commRate:comm,commAmt,net:fare-commAmt+tip,_payType,_explicitComm};
 }
 
 function showFabStatus(msg){const el=document.getElementById('voiceFabStatus');el.textContent=msg;el.style.display='block';}
