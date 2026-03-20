@@ -1577,9 +1577,13 @@ async function _processVoiceResult(raw){
   }
 
   // ── Step 4: Local validation pass (always runs) ─────────
-  // Strip currency symbols, percent signs, special characters
+  // Preserve NUMBER% patterns before stripping — convert to "NUMBER commission"
+  // so parseQuick can detect the commission rate (it handles both forms)
+  cleaned=cleaned.replace(/\b(\d+)\s*%/g,'$1 commission');
+
+  // Now safe to strip remaining special characters
   cleaned=cleaned
-    .replace(/[₱%$,!?.'";:@#^&*()[\]{}|\\/<>]/g,'')
+    .replace(/[₱$,!?.'";:@#^&*()[\]{}|\\/<>]/g,'')
     .replace(/[^\d\s\.a-zA-Z]/g,'')
     .replace(/\s+/g,' ').trim();
 
