@@ -338,6 +338,39 @@ input,select,button{font-family:inherit}
 .ai-status-pill.active{background:rgba(61,153,112,0.12);color:var(--pos);border:1px solid rgba(61,153,112,0.28);}
 .ai-status-pill.inactive{background:var(--bg-3);color:var(--text-3);border:1px solid var(--border);}
 .ai-status-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;}
+/* ── Payment picker toast ── */
+.pay-picker{
+  position:fixed;bottom:calc(var(--nav-h)+12px);left:50%;
+  transform:translateX(-50%) translateY(12px);
+  background:var(--surface);border:1px solid var(--border-3);
+  border-left:3px solid var(--warn);
+  border-radius:var(--r3);padding:10px 12px 12px;
+  display:flex;flex-direction:column;gap:8px;
+  min-width:260px;max-width:360px;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.22s,transform 0.22s;
+  box-shadow:0 4px 24px rgba(0,0,0,0.35);
+  z-index:503;overflow:hidden;
+}
+.pay-picker.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:all}
+.pay-picker-top{display:flex;align-items:center;justify-content:space-between}
+.pay-picker-label{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--warn)}
+.pay-picker-fare{font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--text-1);letter-spacing:-0.3px}
+.pay-picker-hint{font-size:11px;color:var(--text-2)}
+.pay-picker-btns{display:flex;gap:var(--s2)}
+.pay-picker-btn{flex:1;border:none;border-radius:var(--r2);padding:8px;font-family:var(--font-ui);font-size:12px;font-weight:700;cursor:pointer;transition:all var(--t-fast);min-height:36px;letter-spacing:0.02em;}
+.pay-btn-cash{background:var(--accent);color:#fff}
+.pay-btn-cash:hover{filter:brightness(1.1)}
+.pay-btn-wallet{background:var(--pos-dim);color:var(--pos);border:1px solid rgba(61,153,112,0.3)}
+.pay-btn-wallet:hover{background:rgba(61,153,112,0.2)}
+/* ── Payment badge on trip card ── */
+.pay-badge{
+  display:inline-flex;align-items:center;gap:3px;
+  font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;
+  padding:1px 6px;border-radius:var(--r1);flex-shrink:0;
+}
+.pay-badge-cash{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-mid);}
+.pay-badge-wallet{background:var(--pos-dim);color:var(--pos);border:1px solid rgba(61,153,112,0.28);}
 @media print{body,.app,.nav{display:none!important}.print-zone{display:block!important;padding:1.5rem;font-family:Arial,sans-serif;color:#111;background:#fff}}
 </style>
 </head>
@@ -412,7 +445,7 @@ input,select,button{font-family:inherit}
       <div id="panel-quick" class="mode-panel active">
         <div class="mic-hint-bar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          <span><code>150</code> · <code>150 20 tip</code> · <code>150 20 tip 18 commission</code></span>
+          <span><code>150 cash</code> · <code>150 wallet</code> · <code>150 20 tip cash</code></span>
         </div>
         <!-- AI status indicator -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)">
@@ -421,11 +454,12 @@ input,select,button{font-family:inherit}
         </div>
         <div class="qe-hints">
           <div class="qe-hint-title">Format Guide · or just speak it</div>
-          <div class="qe-hint-row"><code>150</code><span>₱150 fare, default 20% comm</span></div>
+          <div class="qe-hint-row"><code>150 cash</code><span>₱150 fare, 20% comm deducted → ₱120 take-home</span></div>
+          <div class="qe-hint-row"><code>150 wallet</code><span>₱150 Grab wallet → full ₱150 take-home, no comm</span></div>
+          <div class="qe-hint-row"><code>150</code><span>no type → picker asks Cash or Wallet</span></div>
           <div class="qe-hint-row"><code>147 150</code><span>fare ₱147, customer gave ₱150 → tip ₱3</span></div>
-          <div class="qe-hint-row"><code>150 20 tip</code><span>₱150 fare + ₱20 tip</span></div>
-          <div class="qe-hint-row"><code>150 18 commission</code><span>₱150 fare, 18% commission</span></div>
-          <div class="qe-hint-row"><code>150 20 tip 18 commission</code><span>fare + tip + custom comm</span></div>
+          <div class="qe-hint-row"><code>150 20 tip cash</code><span>₱150 fare + ₱20 tip, cash payment</span></div>
+          <div class="qe-hint-row"><code>150 18 commission</code><span>₱150 fare, 18% commission rate</span></div>
         </div>
       </div>
 
@@ -666,6 +700,20 @@ input,select,button{font-family:inherit}
   <div class="toast-progress" style="position:absolute;bottom:0;left:0;right:0"><div class="toast-progress-bar" id="tripToastBar"></div></div>
 </div>
 
+<!-- Payment picker toast (shown when no cash/wallet specified) -->
+<div class="pay-picker" id="payPicker">
+  <div class="pay-picker-top">
+    <span class="pay-picker-label">Payment type?</span>
+    <span class="pay-picker-fare" id="ppFare"></span>
+  </div>
+  <div class="pay-picker-hint" id="ppHint">Defaulting to Wallet in <span id="ppCountdown">8</span>s</div>
+  <div class="pay-picker-btns">
+    <button class="pay-picker-btn pay-btn-cash" onclick="pickPayment('cash')">💵 Cash (−20%)</button>
+    <button class="pay-picker-btn pay-btn-wallet" onclick="pickPayment('wallet')">👛 Wallet (full)</button>
+  </div>
+  <div class="toast-progress" style="position:absolute;bottom:0;left:0;right:0"><div class="toast-progress-bar" id="payPickerBar"></div></div>
+</div>
+
 </div><!-- .app -->
 
 <!-- BOTTOM NAV -->
@@ -871,9 +919,13 @@ async function geminiSanitize(rawText){
 
 STRICT OUTPUT RULES — violating any rule makes the output useless:
 1. Output ONLY the cleaned token string. NOTHING else — no labels, no "Output:", no explanation, no punctuation, no quotes.
-2. Valid output tokens are ONLY: integers (no decimals, no commas) and the keywords: tip, commission
+2. Valid output tokens are ONLY: integers (no decimals, no commas) and the keywords: tip, commission, cash, wallet
 3. Every number in your output MUST come from the input. NEVER invent or add numbers.
 4. Remove ALL non-number, non-keyword content: filler words, names, places, greetings, directions, currency symbols (₱), percent signs (%), commas, periods.
+   - KEEP the words: cash, wallet, tip, commission if spoken.
+   - "one hundred cash" → 100 cash
+   - "one fifty wallet" → 150 wallet
+   - "one fifty" → 150  (no payment type — leave it out, do NOT guess)
 5. FIX run-together numbers (speech recognition merges separate numbers):
    - Max valid fare or tip = 3 digits (₱10–₱999). Never output a number > 999.
    - 4-digit: split as 2+2 or 3+1. Left part = fare (30–999), right = tip (5–999).
@@ -951,20 +1003,20 @@ Raw transcript: "${rawText}"
     out=out.replace(/\b(\d+)\.\d+\b/g,'$1');
 
     // Gap 5 / Gap 13: if output is ONLY a keyword with no number → UNCLEAR
-    if(/^(tip|commission)$/i.test(out.trim()))return'UNCLEAR';
+    if(/^(tip|commission|cash|wallet)$/i.test(out.trim())&&!/\d/.test(out))return'UNCLEAR';
 
     // Gap 5: UNCLEAR check (case-insensitive, handle extra spaces)
     if(!out||/^unclear$/i.test(out.trim()))return'UNCLEAR';
 
     // Tokenize — only keep integers and the two allowed keywords
     const tokens=out.split(' ').filter(t=>t.length>0);
-    const clean=tokens.filter(t=>/^\d+$/.test(t)||/^(tip|commission)$/i.test(t));
+    const clean=tokens.filter(t=>/^\d+$/.test(t)||/^(tip|commission|cash|wallet)$/i.test(t));
 
     // Gap 12 / Gap 14: remove numbers that are 0, negative, or single-digit
     // (single-digit can't be a fare — minimum realistic fare is ₱10)
     const validTokens=[];
     for(const t of clean){
-      if(/^(tip|commission)$/i.test(t)){validTokens.push(t.toLowerCase());continue;}
+      if(/^(tip|commission|cash|wallet)$/i.test(t)){validTokens.push(t.toLowerCase());continue;}
       const n=parseInt(t,10);
       if(n<10)continue; // too small to be a fare or tip
       validTokens.push(String(n));
@@ -973,7 +1025,7 @@ Raw transcript: "${rawText}"
     // Gap 3: clamp any number > 999 — split it or drop it
     const clamped=[];
     for(const t of validTokens){
-      if(/^(tip|commission)$/i.test(t)){clamped.push(t);continue;}
+      if(/^(tip|commission|cash|wallet)$/i.test(t)){clamped.push(t);continue;}
       const n=parseInt(t,10);
       if(n<=999){clamped.push(t);}
       else{
@@ -1000,7 +1052,7 @@ Raw transcript: "${rawText}"
     const trimmed=clamped.slice(0,5);
 
     // Gap 16: keyword must not be the first token (no leading orphan keywords)
-    while(trimmed.length>0&&/^(tip|commission)$/i.test(trimmed[0]))trimmed.shift();
+    while(trimmed.length>0&&/^(tip|commission)$/i.test(trimmed[0]))trimmed.shift(); // cash/wallet can lead
 
     // Gap 17+18: deduplicate repeated keywords — keep only the first tip and first commission
     const seen={tip:false,commission:false};
@@ -1475,7 +1527,7 @@ async function _processVoiceResult(raw){
   // Allowed keywords: tip, commission (and only those two)
   cleaned=cleaned
     .split(' ')
-    .filter(tok=>/^\d+(\.\d+)?$/.test(tok)||/^(tip|commission)$/i.test(tok))
+    .filter(tok=>/^\d+(\.\d+)?$/.test(tok)||/^(tip|commission|cash|wallet)$/i.test(tok))
     .join(' ')
     .trim();
 
@@ -1497,9 +1549,8 @@ async function _processVoiceResult(raw){
   if(anyNum){
     const fare=parseFloat(anyNum[1]);
     if(fare>0&&fare<=999){
-      const commRate=DEFAULT_COMM,commAmt=fare*(commRate/100);
       hideFabStatus();
-      showVoiceConfirm(cleaned,{fare,tip:0,commRate,commAmt,net:fare-commAmt,id:Date.now()});
+      showVoiceConfirm(cleaned,{fare,tip:0,commRate:DEFAULT_COMM,commAmt:fare*(DEFAULT_COMM/100),net:fare-(fare*(DEFAULT_COMM/100)),_payType:null});
       return;
     }
   }
@@ -1515,31 +1566,85 @@ let voiceConfirmPending=null;
 let voiceConfirmTimer=null;
 
 function showVoiceConfirm(cleanedText,parsedTrip){
-  // Cancel any previous pending trip
   if(pendingTrip)commitPendingTrip();
   if(voiceConfirmPending){clearTimeout(voiceConfirmTimer);voiceConfirmPending=null;}
 
-  voiceConfirmPending={...parsedTrip,id:Date.now()};
+  // If payment type unknown → show picker first, then confirm
+  if(parsedTrip._payType===null||parsedTrip._payType===undefined){
+    showPaymentPicker(cleanedText,parsedTrip);
+    return;
+  }
 
+  voiceConfirmPending={...parsedTrip,id:Date.now()};
   const parts=[];
   parts.push(fmt(parsedTrip.fare)+' fare');
   if(parsedTrip.tip>0)parts.push(fmt(parsedTrip.tip)+' tip');
-  parts.push(parsedTrip.commRate+'% comm → net '+fmt(parsedTrip.net));
-
+  const payLabel=parsedTrip._payType==='wallet'?'👛 Wallet':'💵 Cash −'+parsedTrip.commRate+'%';
+  parts.push(payLabel+' → net '+fmt(parsedTrip.net));
   const hasAI=!!localStorage.getItem('mi_gemini_key');
-  const prefix=hasAI?'🤖 "'+cleanedText+'" · ':'🎤 "'+cleanedText+'" · ';
-
   document.getElementById('ttNet').textContent=fmt(parsedTrip.net);
-  document.getElementById('ttDetails').textContent=prefix+parts.join(' · ');
+  document.getElementById('ttDetails').textContent=(hasAI?'🤖 "'+cleanedText+'" · ':'🎤 "'+cleanedText+'" · ')+parts.join(' · ');
   document.getElementById('ttLabel').textContent='Confirm trip?';
   document.getElementById('tripToastUndo').textContent='DISCARD';
-
   const el=document.getElementById('tripToast');
-  el.style.borderLeftColor='var(--accent)';
+  el.style.borderLeftColor=parsedTrip._payType==='wallet'?'var(--pos)':'var(--accent)';
   el.classList.add('show');
   clearTimeout(voiceConfirmTimer);
   startBar('tripToastBar',8000);
   voiceConfirmTimer=setTimeout(()=>commitVoiceConfirm(),8000);
+}
+
+// ── Payment picker ───────────────────────────────────────────
+let _pickerTrip=null;
+let _pickerText=null;
+let _pickerTimer=null;
+let _pickerCountdown=null;
+
+function showPaymentPicker(cleanedText,parsedTrip){
+  // Store the parsed trip without payment type yet
+  _pickerTrip={...parsedTrip};
+  _pickerText=cleanedText;
+
+  document.getElementById('ppFare').textContent=fmt(parsedTrip.fare)+(parsedTrip.tip>0?' + '+fmt(parsedTrip.tip)+' tip':'');
+  document.getElementById('ppCountdown').textContent='8';
+  document.getElementById('payPicker').classList.add('show');
+  startBar('payPickerBar',8000);
+
+  // Countdown display
+  let secs=8;
+  clearInterval(_pickerCountdown);
+  _pickerCountdown=setInterval(()=>{secs--;const el=document.getElementById('ppCountdown');if(el)el.textContent=secs;if(secs<=0)clearInterval(_pickerCountdown);},1000);
+
+  clearTimeout(_pickerTimer);
+  _pickerTimer=setTimeout(()=>pickPayment('wallet'),8000); // default wallet
+}
+
+function pickPayment(type){
+  clearTimeout(_pickerTimer);
+  clearInterval(_pickerCountdown);
+  stopBar('payPickerBar');
+  document.getElementById('payPicker').classList.remove('show');
+
+  if(!_pickerTrip)return;
+  const trip={..._pickerTrip};
+  const text=_pickerText||'';
+
+  // Apply commission based on chosen type
+  if(type==='cash'){
+    trip._payType='cash';
+    trip.commRate=DEFAULT_COMM;
+    trip.commAmt=trip.fare*(DEFAULT_COMM/100);
+    trip.net=trip.fare-trip.commAmt+(trip.tip||0);
+  } else {
+    trip._payType='wallet';
+    trip.commRate=0;
+    trip.commAmt=0;
+    trip.net=trip.fare+(trip.tip||0);
+  }
+
+  _pickerTrip=null;
+  _pickerText=null;
+  showVoiceConfirm(text,trip);
 }
 
 function commitVoiceConfirm(){
@@ -1579,7 +1684,7 @@ function cleanVoiceInput(text){
   s=s.replace(/\b(\w+)\s+hundred\b/g,(m,a)=>{const av=WORD_NUMS[a];return av!==undefined?String(av*100):m;});
   s=s.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s+(one|two|three|four|five|six|seven|eight|nine)\b/g,(m,tens,ones)=>String(WORD_NUMS[tens]+WORD_NUMS[ones]));
   s=s.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,m=>WORD_NUMS[m]!==undefined?String(WORD_NUMS[m]):m);
-  s=s.replace(/\b(?!tip\b|commission\b|percent\b|\d)(\w+)\b/g,'');
+  s=s.replace(/\b(?!tip\b|commission\b|cash\b|wallet\b|percent\b|\d)(\w+)\b/g,'');
   s=s.replace(/\bpercent\b/g,'%');
   s=s.replace(/\s+/g,' ').trim();
   return s;
@@ -1660,17 +1765,33 @@ function submitQuick(){/* no-op: quick input removed */}
 function parseQuick(raw){
   const s=raw.trim().toLowerCase();if(!s)return null;
   let fare=null,tip=0,comm=DEFAULT_COMM;
-  const tipAfter=s.match(/\btip\s+(\d+(?:\.\d+)?)/);const tipBefore=s.match(/(\d+(?:\.\d+)?)\s+tip\b/);
+
+  // ── Payment type detection ─────────────────────────────────
+  // cash → apply commission | wallet → 0% commission | null → ask user
+  let _payType=null;
+  if(/\bcash\b/.test(s))_payType='cash';
+  else if(/\bwallet\b/.test(s))_payType='wallet';
+
+  // Strip payment keywords before parsing numbers
+  const clean=s.replace(/\b(cash|wallet)\b/g,'').replace(/\s+/g,' ').trim();
+
+  const tipAfter=clean.match(/\btip\s+(\d+(?:\.\d+)?)/);const tipBefore=clean.match(/(\d+(?:\.\d+)?)\s+tip\b/);
   if(tipAfter)tip=parseFloat(tipAfter[1]);else if(tipBefore)tip=parseFloat(tipBefore[1]);
-  const commAfter=s.match(/\bcommission\s+(\d+(?:\.\d+)?)/);const commBefore=s.match(/(\d+(?:\.\d+)?)\s+commission\b/);const commPct=s.match(/(\d+(?:\.\d+)?)\s*%/);
+  const commAfter=clean.match(/\bcommission\s+(\d+(?:\.\d+)?)/);const commBefore=clean.match(/(\d+(?:\.\d+)?)\s+commission\b/);const commPct=clean.match(/(\d+(?:\.\d+)?)\s*%/);
   if(commAfter)comm=parseFloat(commAfter[1]);else if(commBefore)comm=parseFloat(commBefore[1]);else if(commPct)comm=parseFloat(commPct[1]);
-  let stripped=s.replace(/\btip\s+\d+(?:\.\d+)?/g,'').replace(/\d+(?:\.\d+)?\s+tip\b/g,'').replace(/\bcommission\s+\d+(?:\.\d+)?/g,'').replace(/\d+(?:\.\d+)?\s+commission\b/g,'').replace(/\d+(?:\.\d+)?\s*%/g,'').replace(/\s+/g,' ').trim();
+
+  // Override commission based on payment type
+  // wallet → always 0%, cash → use DEFAULT_COMM unless explicitly stated
+  if(_payType==='wallet')comm=0;
+  else if(_payType==='cash'&&!commAfter&&!commBefore&&!commPct)comm=DEFAULT_COMM;
+
+  let stripped=clean.replace(/\btip\s+\d+(?:\.\d+)?/g,'').replace(/\d+(?:\.\d+)?\s+tip\b/g,'').replace(/\bcommission\s+\d+(?:\.\d+)?/g,'').replace(/\d+(?:\.\d+)?\s+commission\b/g,'').replace(/\d+(?:\.\d+)?\s*%/g,'').replace(/\s+/g,' ').trim();
   const bareNums=stripped.match(/(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)/);
   if(bareNums&&tip===0){const n1=parseFloat(bareNums[1]),n2=parseFloat(bareNums[2]);if(n2>n1){fare=n1;tip=Math.round((n2-n1)*100)/100;}else{fare=n1;}}
   else{const fM=stripped.match(/(\d+(?:\.\d+)?)/);if(fM)fare=parseFloat(fM[1]);}
   if(!fare||fare<=0)return{error:'No fare found'};
   const commAmt=fare*(comm/100);
-  return{fare,tip,commRate:comm,commAmt,net:fare-commAmt+tip};
+  return{fare,tip,commRate:comm,commAmt,net:fare-commAmt+tip,_payType};
 }
 
 function showFabStatus(msg){const el=document.getElementById('voiceFabStatus');el.textContent=msg;el.style.display='block';}
@@ -1718,9 +1839,13 @@ function commitPendingTrip(){
 
 function undoTripAdd(){
   clearTimeout(tripToastTimer);clearTimeout(voiceConfirmTimer);
-  stopBar('tripToastBar');
+  clearTimeout(_pickerTimer);clearInterval(_pickerCountdown);
+  stopBar('tripToastBar');stopBar('payPickerBar');
   pendingTrip=null;voiceConfirmPending=null;
-  hideTripToast();_resetTripToast();
+  _pickerTrip=null;_pickerText=null;
+  hideTripToast();
+  document.getElementById('payPicker').classList.remove('show');
+  _resetTripToast();
   showToastSimple('Trip discarded.',2000);
 }
 
@@ -1759,7 +1884,10 @@ function renderTrips(){
         <div class="trip-idx">${tripNum}</div>
         <div class="trip-body">
           <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">${fmt(t.fare)} fare</div>
-          <div class="trip-meta">tip ${fmt(t.tip)} · ${t._source==='grab'?'svc fee −'+fmt(t.commAmt):t._source==='grab-list'?'earnings list import'+(t._dest?' · '+t._dest.substring(0,20):''):t.commRate+'% comm'}</div>
+          <div class="trip-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span>tip ${fmt(t.tip)} · ${t._source==='grab'?'svc fee −'+fmt(t.commAmt):t._source==='grab-list'?'earnings list'+(t._dest?' · '+t._dest.substring(0,18):''):t.commRate+'% comm'}</span>
+            ${t._payType?`<span class="pay-badge ${t._payType==='wallet'?'pay-badge-wallet':'pay-badge-cash'}">${t._payType==='wallet'?'👛 Wallet':'💵 Cash'}</span>`:''}
+          </div>
         </div>
         <div class="trip-net">${fmt(t.net)}</div>
         <div class="trip-edit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
