@@ -367,6 +367,8 @@ input,select,button{font-family:inherit}
 .pay-btn-cash:hover{filter:brightness(1.1)}
 .pay-btn-wallet{background:var(--pos-dim);color:var(--pos);border:1px solid rgba(61,153,112,0.3)}
 .pay-btn-wallet:hover{background:rgba(61,153,112,0.2)}
+.pay-btn-cancel{background:transparent;color:var(--text-2);border:1px solid var(--border-2)}
+.pay-btn-cancel:hover{background:var(--bg-3);color:var(--text-1)}
 /* ── Payment badge on trip card ── */
 .pay-badge{
   display:inline-flex;align-items:center;gap:3px;
@@ -469,9 +471,23 @@ input,select,button{font-family:inherit}
 
       <div id="panel-form" class="mode-panel" style="display:none">
         <div class="field-grid" style="margin-bottom:var(--s2)">
-          <div class="field"><label>Fare (₱)</label><input type="number" id="tripFare" placeholder="0.00" min="0" inputmode="decimal"></div>
-          <div class="field"><label>Tip (₱)</label><input type="number" id="tripTip" placeholder="0.00" min="0" inputmode="decimal"></div>
-          <div class="field"><label>Commission %</label><input type="number" id="tripComm" placeholder="20" min="0" max="100" inputmode="decimal"></div>
+          <div class="field">
+            <label>Fare (₱)</label>
+            <input type="number" id="tripFare" placeholder="0.00" min="0" inputmode="decimal" oninput="formCalcPreview()">
+          </div>
+          <div class="field">
+            <label>Actual Pay (₱) <span style="font-size:9px;color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">optional</span></label>
+            <input type="number" id="tripActualPay" placeholder="same as fare" min="0" inputmode="decimal" oninput="formCalcPreview()">
+          </div>
+          <div class="field">
+            <label>Commission %</label>
+            <input type="number" id="tripComm" placeholder="20" min="0" max="100" inputmode="decimal" oninput="formCalcPreview()">
+          </div>
+        </div>
+        <!-- Live preview row -->
+        <div id="formPreview" style="display:none;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r2);padding:8px var(--s3);margin-bottom:var(--s2);display:flex;align-items:center;justify-content:space-between;gap:var(--s2)">
+          <span style="font-size:11px;color:var(--text-2)" id="formPreviewDetail"></span>
+          <span style="font-family:var(--font-num);font-size:14px;font-weight:600;color:var(--pos)" id="formPreviewNet"></span>
         </div>
         <button class="btn btn-primary" onclick="addTripForm()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="14" height="14" style="stroke-width:2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -710,10 +726,11 @@ input,select,button{font-family:inherit}
     <span class="pay-picker-label">Payment type?</span>
     <span class="pay-picker-fare" id="ppFare"></span>
   </div>
-  <div class="pay-picker-hint" id="ppHint">Defaulting to Wallet in <span id="ppCountdown">8</span>s</div>
+  <div class="pay-picker-hint" id="ppHint">No selection defaults to Wallet in <span id="ppCountdown">8</span>s</div>
   <div class="pay-picker-btns">
-    <button class="pay-picker-btn pay-btn-cash" onclick="pickPayment('cash')">💵 Cash (−20%)</button>
-    <button class="pay-picker-btn pay-btn-wallet" onclick="pickPayment('wallet')">👛 Wallet (full)</button>
+    <button class="pay-picker-btn pay-btn-cash" onclick="pickPayment('cash')">💵 Cash</button>
+    <button class="pay-picker-btn pay-btn-wallet" onclick="pickPayment('wallet')">👛 Wallet</button>
+    <button class="pay-picker-btn pay-btn-cancel" onclick="pickPayment('cancel')">✕ Cancel</button>
   </div>
   <div class="toast-progress" style="position:absolute;bottom:0;left:0;right:0"><div class="toast-progress-bar" id="payPickerBar"></div></div>
 </div>
@@ -1631,7 +1648,7 @@ function showPaymentPicker(cleanedText,parsedTrip){
     backdrop=document.createElement('div');
     backdrop.id='payPickerBackdrop';
     backdrop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:509;backdrop-filter:blur(2px);';
-    backdrop.onclick=()=>pickPayment('wallet'); // tap backdrop = default to wallet
+    backdrop.onclick=()=>pickPayment('cancel'); // tap backdrop = cancel
     document.body.appendChild(backdrop);
   }
   backdrop.style.display='block';
@@ -1646,7 +1663,7 @@ function showPaymentPicker(cleanedText,parsedTrip){
   _pickerCountdown=setInterval(()=>{secs--;const el=document.getElementById('ppCountdown');if(el)el.textContent=secs;if(secs<=0)clearInterval(_pickerCountdown);},1000);
 
   clearTimeout(_pickerTimer);
-  _pickerTimer=setTimeout(()=>pickPayment('wallet'),8000); // default wallet
+  _pickerTimer=setTimeout(()=>pickPayment('cancel'),8000); // no selection = cancel
 }
 
 function pickPayment(type){
@@ -1656,6 +1673,12 @@ function pickPayment(type){
   document.getElementById('payPicker').classList.remove('show');
   const bd=document.getElementById('payPickerBackdrop');
   if(bd)bd.style.display='none';
+
+  if(type==='cancel'){
+    _pickerTrip=null;_pickerText=null;
+    showToastSimple('Trip cancelled.',2000);
+    return;
+  }
 
   if(!_pickerTrip)return;
   const trip={..._pickerTrip};
@@ -1853,16 +1876,37 @@ function hideFabStatus(){document.getElementById('voiceFabStatus').style.display
 // ════════════════════════════════════════
 // DETAILED FORM
 // ════════════════════════════════════════
+function formCalcPreview(){
+  const fare=parseFloat(document.getElementById('tripFare').value)||0;
+  const actualPay=parseFloat(document.getElementById('tripActualPay').value)||0;
+  const commInput=parseFloat(document.getElementById('tripComm').value);
+  const commRate=isNaN(commInput)?DEFAULT_COMM:commInput;
+  if(fare<=0){document.getElementById('formPreview').style.display='none';return;}
+  const tip=actualPay>fare?Math.round((actualPay-fare)*100)/100:0;
+  const commAmt=Math.round(fare*(commRate/100)*100)/100;
+  const net=fare-commAmt+tip;
+  const detail=(tip>0?`tip ${fmt(tip)} · `:'')+'comm −'+fmt(commAmt)+' ('+commRate+'%)';
+  document.getElementById('formPreviewDetail').textContent=detail;
+  document.getElementById('formPreviewNet').textContent=fmt(net)+' net';
+  document.getElementById('formPreview').style.display='flex';
+}
+
 function addTripForm(){
   const fare=parseFloat(document.getElementById('tripFare').value)||0;
-  const tip=parseFloat(document.getElementById('tripTip').value)||0;
+  const actualPay=parseFloat(document.getElementById('tripActualPay').value)||0;
   const commInput=parseFloat(document.getElementById('tripComm').value);
   const commRate=isNaN(commInput)?DEFAULT_COMM:commInput;
   if(fare<=0){showToastSimple('Enter a fare amount first.');return;}
-  const commAmt=fare*(commRate/100);
-  const trip={fare,tip,commRate,commAmt,net:fare-commAmt+tip,id:Date.now()};
-  ['tripFare','tripTip'].forEach(id=>document.getElementById(id).value='');
-  showVoiceConfirm(fare+(tip>0?' '+tip+' tip':''),trip);
+  // tip = difference between actual pay and fare (only if customer paid more)
+  const tip=actualPay>fare?Math.round((actualPay-fare)*100)/100:0;
+  const commAmt=Math.round(fare*(commRate/100)*100)/100;
+  const trip={fare,tip,commRate,commAmt,net:fare-commAmt+tip,id:Date.now(),_payType:null};
+  // Clear fields
+  ['tripFare','tripActualPay'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('formPreview').style.display='none';
+  // Build display text for confirm toast
+  const displayText=fare+(tip>0?' '+actualPay+' actual pay':'');
+  showVoiceConfirm(displayText,trip);
 }
 
 // ════════════════════════════════════════
