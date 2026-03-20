@@ -340,25 +340,29 @@ input,select,button{font-family:inherit}
 .ai-status-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;}
 /* ── Payment picker toast ── */
 .pay-picker{
-  position:fixed;bottom:calc(var(--nav-h)+12px);left:50%;
-  transform:translateX(-50%) translateY(12px);
-  background:var(--surface);border:1px solid var(--border-3);
-  border-left:3px solid var(--warn);
-  border-radius:var(--r3);padding:10px 12px 12px;
-  display:flex;flex-direction:column;gap:8px;
-  min-width:260px;max-width:360px;
+  position:fixed;
+  bottom:calc(var(--nav-h) + 80px);
+  left:50%;
+  transform:translateX(-50%) translateY(16px);
+  background:var(--surface);
+  border:1px solid var(--border-3);
+  border-top:3px solid var(--warn);
+  border-radius:var(--r4);
+  padding:var(--s4) var(--s4) var(--s3);
+  display:flex;flex-direction:column;gap:10px;
+  min-width:290px;max-width:380px;width:calc(100vw - 40px);
   opacity:0;pointer-events:none;
   transition:opacity 0.22s,transform 0.22s;
-  box-shadow:0 4px 24px rgba(0,0,0,0.35);
-  z-index:503;overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,0.45);
+  z-index:510;overflow:hidden;
 }
 .pay-picker.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:all}
 .pay-picker-top{display:flex;align-items:center;justify-content:space-between}
-.pay-picker-label{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--warn)}
-.pay-picker-fare{font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--text-1);letter-spacing:-0.3px}
+.pay-picker-label{font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--warn)}
+.pay-picker-fare{font-family:var(--font-num);font-size:18px;font-weight:600;color:var(--text-1);letter-spacing:-0.5px}
 .pay-picker-hint{font-size:11px;color:var(--text-2)}
 .pay-picker-btns{display:flex;gap:var(--s2)}
-.pay-picker-btn{flex:1;border:none;border-radius:var(--r2);padding:8px;font-family:var(--font-ui);font-size:12px;font-weight:700;cursor:pointer;transition:all var(--t-fast);min-height:36px;letter-spacing:0.02em;}
+.pay-picker-btn{flex:1;border:none;border-radius:var(--r3);padding:12px 8px;font-family:var(--font-ui);font-size:13px;font-weight:700;cursor:pointer;transition:all var(--t-fast);min-height:48px;letter-spacing:0.02em;}
 .pay-btn-cash{background:var(--accent);color:#fff}
 .pay-btn-cash:hover{filter:brightness(1.1)}
 .pay-btn-wallet{background:var(--pos-dim);color:var(--pos);border:1px solid rgba(61,153,112,0.3)}
@@ -1614,16 +1618,29 @@ let _pickerTimer=null;
 let _pickerCountdown=null;
 
 function showPaymentPicker(cleanedText,parsedTrip){
-  // Store the parsed trip without payment type yet
   _pickerTrip={...parsedTrip};
   _pickerText=cleanedText;
 
   document.getElementById('ppFare').textContent=fmt(parsedTrip.fare)+(parsedTrip.tip>0?' + '+fmt(parsedTrip.tip)+' tip':'');
   document.getElementById('ppCountdown').textContent='8';
   document.getElementById('payPicker').classList.add('show');
+
+  // Show backdrop so picker stands out against content
+  let backdrop=document.getElementById('payPickerBackdrop');
+  if(!backdrop){
+    backdrop=document.createElement('div');
+    backdrop.id='payPickerBackdrop';
+    backdrop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:509;backdrop-filter:blur(2px);';
+    backdrop.onclick=()=>pickPayment('wallet'); // tap backdrop = default to wallet
+    document.body.appendChild(backdrop);
+  }
+  backdrop.style.display='block';
+
+  // Haptic feedback if available
+  if(navigator.vibrate)navigator.vibrate([60,40,60]);
+
   startBar('payPickerBar',8000);
 
-  // Countdown display
   let secs=8;
   clearInterval(_pickerCountdown);
   _pickerCountdown=setInterval(()=>{secs--;const el=document.getElementById('ppCountdown');if(el)el.textContent=secs;if(secs<=0)clearInterval(_pickerCountdown);},1000);
@@ -1637,6 +1654,8 @@ function pickPayment(type){
   clearInterval(_pickerCountdown);
   stopBar('payPickerBar');
   document.getElementById('payPicker').classList.remove('show');
+  const bd=document.getElementById('payPickerBackdrop');
+  if(bd)bd.style.display='none';
 
   if(!_pickerTrip)return;
   const trip={..._pickerTrip};
@@ -1879,6 +1898,7 @@ function undoTripAdd(){
   _pickerTrip=null;_pickerText=null;
   hideTripToast();
   document.getElementById('payPicker').classList.remove('show');
+  const bd=document.getElementById('payPickerBackdrop');if(bd)bd.style.display='none';
   _resetTripToast();
   showToastSimple('Trip discarded.',2000);
 }
