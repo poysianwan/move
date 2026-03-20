@@ -1562,6 +1562,10 @@ async function _processVoiceResult(raw){
   if(hasKey){
     showFabStatus('🤖 AI cleaning input...');
     cleaned=await geminiSanitize(raw);
+    // DEBUG: show exactly what Gemini returned
+    console.log('[Voice] raw:',raw,'| Gemini:',cleaned);
+    showFabStatus('🤖 Gemini: "'+cleaned+'"');
+    await new Promise(r=>setTimeout(r,1500)); // pause so user can see it
   }
 
   // ── Step 2: UNCLEAR = rejected ──────────────────────────
@@ -1608,7 +1612,11 @@ async function _processVoiceResult(raw){
   }
 
   // ── Step 5: Parse ────────────────────────────────────────
+  console.log('[Voice] final cleaned for parseQuick:',cleaned);
+  showFabStatus('📋 Parsing: "'+cleaned+'"');
+  await new Promise(r=>setTimeout(r,1500));
   const r=parseQuick(cleaned);
+  console.log('[Voice] parseQuick result:',JSON.stringify(r));
   if(r&&!r.error){
     hideFabStatus();
     showVoiceConfirm(cleaned,r);
